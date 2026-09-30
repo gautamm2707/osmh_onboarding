@@ -79,6 +79,9 @@ def resolve_image(identity, config, kwargs, home, compartment_id, image=None):
 
 def choose(label, values, describe):
     if not values:
+        if label == "Function application":
+            raise SystemExit("No available Function application found in the tenancy. "
+                             "Choose Create a new Function application.")
         raise SystemExit(f"No available {label}. Choose a new Function network or --network-compartment-id.")
     print(f"Select {label}:")
     for index, value in enumerate(values, 1):
@@ -120,13 +123,20 @@ def select_network(args, identity, config, kwargs):
 
 
 def select_application(args, identity, config, kwargs):
-    """List existing Function applications in the target tree in the home region."""
+    """List existing Function applications across the tenancy in the home region."""
     client = oci.functions.FunctionsManagementClient({**config, "region": args.deployment_region}, **kwargs)
-    root = getattr(args, "network_compartment_id", None) or args.compartment_id
     from osmh_runtime import validate_compartment_tenancy
-    validate_compartment_tenancy(identity, root, config["tenancy"])
-    compartments = discover_compartments(identity, root)
-    labels = {c.id: c.name for c in compartments}
+    validate_compartment_tenancy(identity, config["tenancy"], config["tenancy"])
+    compartments = discover_compartments(identity, config["tenancy"])
+    by_id = {c.id: c for c in compartments}
+    labels = {}
+    for compartment in compartments:
+        parts = []
+        current = compartment
+        while current:
+            parts.append(current.name)
+            current = by_id.get(getattr(current, "compartment_id", None))
+        labels[compartment.id] = " / ".join(reversed(parts))
     apps = []
     for compartment in compartments:
         apps.extend(a for a in list_call_get_all_results(client.list_applications, compartment.id).data

@@ -79,10 +79,11 @@ value is rejected before tagging. Workload regions may be different.
 
 The deployment picker first lets you reuse an existing Function application or
 create a new one. Reusing an application avoids the Functions Application service
-limit and does not ask for VCN/subnet input. Use
-`--function-application-id <fnapp-OCID>` for non-interactive reuse. If creating a
-new app, the network picker searches the supplied compartment/root and its
-descendants in the home region. For shared networking elsewhere, pass
+limit and does not ask for VCN/subnet input. The reuse picker searches the full
+tenancy tree in the home region and shows each Function application with its
+compartment path. Use `--function-application-id <fnapp-OCID>` for non-interactive
+reuse. If creating a new app, the network picker searches the supplied
+compartment/root and its descendants in the home region. For shared networking elsewhere, pass
 `--network-compartment-id <NETWORK_COMPARTMENT_OR_TENANCY_OCID>` to browse that tree.
 You may bypass the network picker with `--create-function-network` or
 `--function-subnet-ids <subnet-OCID>[,<another-subnet-OCID>]`. Existing subnets must
