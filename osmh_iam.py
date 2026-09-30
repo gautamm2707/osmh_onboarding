@@ -19,6 +19,10 @@ from osmh_tags import tag_rule
 GROUP_DESCRIPTION = "OSMH administrators (managed by onboard_osmh.py)"
 DG_DESCRIPTION = "OSMH Compute instances (managed by onboard_osmh.py)"
 POLICY_DESCRIPTION = "OSMH access (managed by onboard_osmh.py)"
+DEFAULT_ADMIN_GROUP = "osmh-admins"
+DEFAULT_TAGGED_DYNAMIC_GROUP = "osmh-tagged-instances"
+DEFAULT_COMPARTMENT_DYNAMIC_GROUP = "osmh-instances"
+DEFAULT_POLICY = "osmh-automation-policy"
 
 
 def action(args: Any, message: str) -> None:
@@ -203,15 +207,14 @@ def _ensure_tree_iam(args: Any, identity: Any, tenancy_id: str,
                      compartment_ids: list[str], caller_user_id: str) -> bool:
     root = args.compartment_id
     ids = sorted(set([root, *compartment_ids]))
-    suffix = root[-12:].lower()
     admin_arg = getattr(args, "admin_group", None)
     dg_arg = getattr(args, "instance_dynamic_group", None)
     operator_arg = getattr(args, "operator_group", None)
     domain = getattr(args, "identity_domain", None)
-    admin_name = admin_arg or f"osmh-admins-{suffix}"
+    admin_name = admin_arg or DEFAULT_ADMIN_GROUP
     namespace = getattr(args, "tag_namespace", None)
-    dg_name = dg_arg or (f"osmh-tagged-{suffix}" if namespace else f"osmh-instances-{suffix}")
-    policy_name = f"osmh-automation-{suffix}"
+    dg_name = dg_arg or (DEFAULT_TAGGED_DYNAMIC_GROUP if namespace else DEFAULT_COMPARTMENT_DYNAMIC_GROUP)
+    policy_name = DEFAULT_POLICY
     required_rule = tag_rule(namespace) if namespace else compartment_rule(ids)
     empty_admin = getattr(args, "allow_empty_admin_group", False)
 

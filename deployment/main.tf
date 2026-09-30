@@ -25,7 +25,7 @@ locals {
   suffix         = substr(var.compartment_id, length(var.compartment_id) - 12, 12)
   name           = "osmh-tags-${local.suffix}-${var.region}"
   scope          = var.compartment_id == var.tenancy_id ? "in tenancy" : "in compartment id ${var.compartment_id}"
-  namespace      = var.tag_namespace == "" ? "OSMH_${local.suffix}" : var.tag_namespace
+  namespace      = var.tag_namespace == "" ? "OSMH" : var.tag_namespace
   repository     = regex("^[^/]+/[^/]+/(.+):[^:]+$", var.image)[0]
   application_id = var.application_id != "" ? var.application_id : oci_functions_application.worker[0].id
   # Bootstrap is assigned to this exact function resource principal, never to opted-in Compute nodes.

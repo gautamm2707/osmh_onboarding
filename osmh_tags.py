@@ -10,10 +10,11 @@ from oci.pagination import list_call_get_all_results
 TAG_KEY = "managedby"
 TAG_VALUE = "osmanagementhub"
 TAG_DESCRIPTION = "OSMH opt-in (managed by onboard_osmh.py)"
+DEFAULT_NAMESPACE = "OSMH"
 
 
 def namespace_name(compartment_id, override=None):
-    name = override or f"OSMH_{compartment_id[-12:]}"
+    name = override or DEFAULT_NAMESPACE
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,99}", name):
         raise SystemExit("Tag namespace must start with a letter and contain only letters, digits or underscores (max 100).")
     return name

@@ -35,6 +35,7 @@ class TagTests(unittest.TestCase):
 
     def test_namespace_and_rule_are_scope_stable_without_compartment_enumeration(self):
         namespace = tags.namespace_name(ROOT)
+        self.assertEqual(namespace, "OSMH")
         rule = tags.tag_rule(namespace)
         self.assertIn("resource.type = 'instance'", rule)
         self.assertIn(f"tag.{namespace}.managedby.value = 'osmanagementhub'", rule)
@@ -133,13 +134,13 @@ class TagTests(unittest.TestCase):
         self.assertNotIn(CHILD, rule)
         identity.add_user_to_group.assert_not_called()
         identity.get_user.assert_not_called()
-        self.assertTrue(any("dynamic-group osmh-tagged-" in s
+        self.assertTrue(any("dynamic-group osmh-tagged-instances" in s
                             for s in identity.create_policy.call_args.args[0].statements))
 
     @patch.object(iam, "list_call_get_all_results", side_effect=pages)
     def test_tag_group_does_not_change_when_new_compartment_appears(self, _):
         identity = client(existing=False)
-        dg = NS(id="dg", name=f"osmh-tagged-{ROOT[-12:]}", matching_rule=tags.tag_rule("NS"),
+        dg = NS(id="dg", name="osmh-tagged-instances", matching_rule=tags.tag_rule("NS"),
                 description=iam.DG_DESCRIPTION, lifecycle_state="ACTIVE")
         identity.list_dynamic_groups.return_value = response([dg])
         identity.get_dynamic_group.return_value = response(dg)

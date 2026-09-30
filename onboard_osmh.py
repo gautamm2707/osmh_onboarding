@@ -59,7 +59,7 @@ def arguments(argv=None) -> argparse.Namespace:
     p.add_argument("compartment_id", help="Parent compartment or tenancy OCID: scan root and descendants; create OSMH groups here")
     p.add_argument("--workflow", choices=("tag", "onboard-tagged"), default="tag",
                    help="Default: select and tag instances. onboard-tagged reconciles only defined-tag opted-in instances.")
-    p.add_argument("--tag-namespace", help="Defined tag namespace (default OSMH_<scope OCID suffix>); key managedby, value osmanagementhub")
+    p.add_argument("--tag-namespace", help="Defined tag namespace (default OSMH); key managedby, value osmanagementhub")
     p.add_argument("--tag-only", action="store_true", help="Select/tag only; skip automatic Function deployment")
     p.add_argument("--deployment-region", help="Optional home-region assertion; Function and OCIR always use the tenancy home region")
     p.add_argument("--function-application-id",
@@ -94,7 +94,7 @@ def arguments(argv=None) -> argparse.Namespace:
     p.add_argument("--group-prefix", default="osmh", help="Prefix for groups created by this script")
     p.add_argument("--registration-timeout", type=int, default=900,
                    help="Seconds to wait for OSMH registration (default: 900)")
-    p.add_argument("--admin-group", help="Optional existing IAM group override; otherwise create osmh-admins-<suffix>")
+    p.add_argument("--admin-group", help="Optional existing IAM group override; otherwise create/reuse osmh-admins")
     p.add_argument("--operator-group",
                    help="Optional existing IAM group granted read-only OSMH operator access in the target compartment")
     p.add_argument("--identity-domain", help="Identity domain prefix for --admin-group")

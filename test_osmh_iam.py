@@ -14,9 +14,9 @@ ROOT = "ocid1.compartment.oc1..root123456789012"
 CHILD = "ocid1.compartment.oc1..child"
 USER = "ocid1.user.oc1..caller"
 TENANCY = "ocid1.tenancy.oc1..test"
-ADMIN_NAME = "osmh-admins-123456789012"
-DG_NAME = "osmh-instances-123456789012"
-POLICY_NAME = "osmh-automation-123456789012"
+ADMIN_NAME = "osmh-admins"
+DG_NAME = "osmh-instances"
+POLICY_NAME = "osmh-automation-policy"
 
 
 def args(**overrides):

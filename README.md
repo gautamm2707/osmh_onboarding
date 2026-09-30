@@ -108,19 +108,19 @@ and tags are retained; rerun with the same scope, deployment region and state.
 
 ## Tag and scope
 
-The namespace defaults to `OSMH_<last 12 characters of the target OCID>`. The key
-is `managedby`, with allowed value `osmanagementhub`. The Compute dynamic group
-uses a constant-size rule, for example:
+The namespace defaults to the reusable tenancy-wide name `OSMH`. The key is
+`managedby`, with allowed value `osmanagementhub`. The Compute dynamic group uses
+a constant-size rule, for example:
 
 ```text
-ALL {resource.type = 'instance', tag.OSMH_76sfz34olata.managedby.value = 'osmanagementhub'}
+ALL {resource.type = 'instance', tag.OSMH.managedby.value = 'osmanagementhub'}
 ```
 
 No compartment IDs are enumerated. Scope is enforced by recursive discovery and
 the parent-scoped instance policies. New child compartments need no membership
-rule update. The namespace belongs to the supplied parent/root and is shared
-across regions. Use the same `--tag-namespace` override in selection and deployment
-if you change its name.
+rule update. Use the same `OSMH` tag namespace for every run and compartment
+unless an administrator intentionally standardizes on a different namespace with
+`--tag-namespace`.
 
 Freeform tags, other namespaces and different values do not qualify. Existing
 defined tags are preserved, with ETag protection against concurrent edits. A
@@ -200,10 +200,12 @@ This reads tags already present in OCI. A tagging dry run does not persist them.
 The worker makes no IAM changes if there are no eligible tagged instances. Remove
 `--dry-run` to exercise the actual worker locally before deployment.
 
-Its first run creates/reuses `osmh-admins-<suffix>`, `osmh-tagged-<suffix>` and OSMH
-policies. In a Function the human admin group receives no automatic membership;
-the Function authenticates through its own resource principal. A local API-user
-worker retains the earlier automatic user-membership behavior.
+Its first run creates/reuses the generic `osmh-admins` IAM group,
+`osmh-tagged-instances` dynamic group and `osmh-automation-policy` IAM policy.
+The policy contains all OSMH statements managed by the worker. In a Function the
+human admin group receives no automatic membership; the Function authenticates
+through its own resource principal. A local API-user worker retains the earlier
+automatic user-membership behavior.
 
 Registered instances skip plugin reconfiguration. Profiles and OSMH groups stay
 in the supplied parent/root within each region. Existing memberships in other
@@ -244,10 +246,10 @@ Deployment creates or reuses an application, then creates the Function and
 schedule. Optional invocation logging can be enabled with `--enable-function-logging`.
 The Function and schedule permissions use exact resource-principal policy
 conditions, so the deployment does not consume extra DynamicResourceGroups. The
-worker creates the separate tag-based Compute group on its first eligible run.
-IAM groups and policies are tenancy-root resources rather than compartment-local
-resources. It also grants the Functions service read access to the specific image
-repository.
+worker creates/reuses the single tag-based Compute group on its first eligible
+run. IAM groups, dynamic groups and policies are tenancy-root resources rather
+than compartment-local resources. It also grants the Functions service read
+access to the specific image repository.
 
 The bootstrap policy grants the Function group/dynamic-group creation and policy
 creation/update, so it can perform the requested first-run IAM setup. **Permission
@@ -315,11 +317,11 @@ python onboard_osmh.py <compartment-or-tenancy-OCID> --cleanup-only --dry-run
 python onboard_osmh.py <compartment-or-tenancy-OCID> --cleanup-only
 ```
 
-A new tag-based Compute group is created instead of overwriting an old
-compartment-based group's rules. Old groups, policy grants, registrations and
+A single reusable tag-based Compute group is created instead of overwriting an
+old compartment-based group's rules. Old groups, policy grants, registrations and
 custom statements are preserved. Legacy grants remain effective until an
 administrator retires them; this change does not revoke old compartment-wide
-membership. Account for extra bootstrap groups/policies in tenancies near quota.
+membership. Account for deployment bootstrap policies in tenancies near quota.
 
 ## Offline checks
 
