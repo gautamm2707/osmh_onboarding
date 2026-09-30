@@ -1,0 +1,30 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local OS/editor files
+.DS_Store
+.idea/
+.vscode/
+
+# Local environment and credentials
+.env
+.env.*
+.oci/
+*.pem
+*.key
+*.crt
+*.p12
+*.log
+
+# Terraform / deployment artifacts
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+.deployment/
