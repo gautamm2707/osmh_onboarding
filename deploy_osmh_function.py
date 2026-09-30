@@ -19,6 +19,8 @@ from osmh_runtime import load_auth, prepare_identity
 from osmh_tags import namespace_name
 from osmh_function_setup import home_region as find_home, resolve_image, docker_session
 
+FUNCTION_DISPLAY_NAME = "onboard-tagged-instances"
+
 
 def validate_image(image):
     match = re.fullmatch(r"([a-z0-9.-]+)/([a-z0-9_-]+)/([a-z0-9._/-]+):([A-Za-z0-9_.-]+)", image or "")
@@ -57,6 +59,42 @@ def terraform_output(terraform, env, state, name):
     result = subprocess.run([*terraform, "output", "-raw", state, name],
                             env=env, check=True, capture_output=True, text=True)
     return result.stdout.strip()
+
+
+def terraform_state_has(terraform, env, state, address):
+    try:
+        result = subprocess.run([*terraform, "state", "list", state], env=env,
+                                check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError:
+        return False
+    return address in {line.strip() for line in result.stdout.splitlines()}
+
+
+def find_existing_function(config, kwargs, application_id, display_name=FUNCTION_DISPLAY_NAME):
+    client = oci.functions.FunctionsManagementClient(config, **kwargs)
+    functions = oci.pagination.list_call_get_all_results(client.list_functions, application_id).data
+    matches = [function for function in functions
+               if getattr(function, "display_name", None) == display_name
+               and getattr(function, "lifecycle_state", "ACTIVE") not in {"DELETING", "DELETED"}]
+    if len(matches) > 1:
+        raise SystemExit(f"More than one active Function named {display_name!r} exists in application {application_id}. "
+                         "Remove the duplicate or use a different Function application.")
+    return matches[0] if matches else None
+
+
+def import_existing_reused_function(args, config, kwargs, terraform, env, state):
+    """Adopt an existing function in a reused app so apply updates it instead of creating a duplicate."""
+    if not args.application_id:
+        return
+    address = "oci_functions_function.worker"
+    if terraform_state_has(terraform, env, state, address):
+        return
+    function = find_existing_function(config, kwargs, args.application_id)
+    if not function:
+        return
+    print(f"Reuse existing Function {FUNCTION_DISPLAY_NAME} in selected application: {function.id}")
+    subprocess.run([*terraform, "import", "-input=false", state, address, function.id],
+                   env=env, check=True)
 
 
 def invoke_initial_reconciliation(config, kwargs, function_id, timeout_seconds=300):
@@ -239,6 +277,7 @@ def main(argv=None):
     terraform = ["terraform", f"-chdir={root / 'deployment'}"]
     subprocess.run([*terraform, "init", "-input=false"], env=env, check=True)
     state = f"-state={state_dir / 'terraform.tfstate'}"
+    import_existing_reused_function(args, config, kwargs, terraform, env, state)
     plan = str(state_dir / "deployment.tfplan")
     subprocess.run([*terraform, "plan", "-input=false", state, f"-out={plan}"], env=env, check=True)
     if not args.apply:

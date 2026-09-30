@@ -199,6 +199,44 @@ class DeploymentTests(unittest.TestCase):
                 deployment.ensure_repository({"tenancy": TENANCY}, {}, ROOT, IMAGE, apply=True)
             self.assertEqual(client.create_container_repository.call_count, 1)
 
+    def test_reused_application_existing_function_is_imported_before_plan(self):
+        args = NS(application_id="ocid1.fnapp.oc1..app")
+        function = NS(id="ocid1.fnfunc.oc1..fn", display_name="onboard-tagged-instances",
+                      lifecycle_state="ACTIVE")
+        commands = []
+
+        def run(command, **kwargs):
+            commands.append(command)
+            if command[1:3] == ["state", "list"]:
+                return NS(stdout="")
+            return NS(stdout="")
+
+        with patch.object(deployment.subprocess, "run", side_effect=run), \
+                patch.object(deployment, "find_existing_function", return_value=function):
+            deployment.import_existing_reused_function(args, {"region": "us-ashburn-1"}, {},
+                                                       ["terraform", "-chdir=deployment"], {}, "-state=statefile")
+        self.assertIn(["terraform", "-chdir=deployment", "import", "-input=false",
+                       "-state=statefile", "oci_functions_function.worker", function.id], commands)
+
+    def test_reused_application_skips_import_when_function_already_in_state(self):
+        args = NS(application_id="ocid1.fnapp.oc1..app")
+        with patch.object(deployment.subprocess, "run",
+                          return_value=NS(stdout="oci_functions_function.worker\n")) as run, \
+                patch.object(deployment, "find_existing_function") as find:
+            deployment.import_existing_reused_function(args, {"region": "us-ashburn-1"}, {},
+                                                       ["terraform"], {}, "-state=statefile")
+        run.assert_called_once()
+        find.assert_not_called()
+
+    def test_existing_function_discovery_rejects_duplicates(self):
+        rows = [NS(id="one", display_name="onboard-tagged-instances", lifecycle_state="ACTIVE"),
+                NS(id="two", display_name="onboard-tagged-instances", lifecycle_state="ACTIVE")]
+        with patch.object(deployment.oci.functions, "FunctionsManagementClient") as factory, \
+                patch.object(deployment.oci.pagination, "list_call_get_all_results", return_value=NS(data=rows)):
+            with self.assertRaisesRegex(SystemExit, "More than one active Function"):
+                deployment.find_existing_function({"region": "us-ashburn-1"}, {}, "ocid1.fnapp.oc1..app")
+        factory.return_value.list_functions.assert_not_called()
+
     def test_initial_reconciliation_invokes_function_detached_with_empty_payload(self):
         with patch.object(deployment.oci.functions, "FunctionsManagementClient") as management, \
                 patch.object(deployment.oci.functions, "FunctionsInvokeClient") as factory:
