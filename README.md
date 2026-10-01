@@ -25,7 +25,7 @@ Start Docker Desktop/Colima, install Terraform, and configure an authorized OCI
 profile. Have an OCI auth token for the user in that profile ready:
 
 ```bash
-cd /Users/gautammishra/Documents/ChatGPT/OSMH
+cd /Users/gautammishra/Documents/OSMH
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
@@ -165,7 +165,7 @@ supported, non-OKE instances are currently offered for selection.
 Run from this project folder:
 
 ```bash
-cd /Users/gautammishra/Documents/ChatGPT/OSMH
+cd /Users/gautammishra/Documents/OSMH
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 python onboard_osmh.py <compartment-or-tenancy-OCID> --dry-run
