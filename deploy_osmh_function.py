@@ -98,14 +98,14 @@ def import_existing_reused_function(args, config, kwargs, terraform, env, state)
 
 
 def invoke_initial_reconciliation(config, kwargs, function_id, timeout_seconds=300):
-    print("Starting initial OSMH reconciliation now in synchronous Function mode...")
+    print("Starting initial OSMH reconciliation now in detached Function mode...")
     function = oci.functions.FunctionsManagementClient(config, **kwargs).get_function(function_id).data
     endpoint = getattr(function, "invoke_endpoint", None)
     if not endpoint:
         raise SystemExit(f"OCI did not return an invoke endpoint for Function {function_id}. "
                          "Wait a minute and invoke it manually, or rerun deployment.")
     client = oci.functions.FunctionsInvokeClient(
-        config, **{**kwargs, "service_endpoint": endpoint, "timeout": (10, max(60, timeout_seconds + 300))})
+        config, **{**kwargs, "service_endpoint": endpoint, "timeout": (10, 60)})
     deadline = time.monotonic() + max(0, timeout_seconds)
     delay = 10
     while True:
@@ -113,26 +113,10 @@ def invoke_initial_reconciliation(config, kwargs, function_id, timeout_seconds=3
             response = client.invoke_function(
                 function_id,
                 invoke_function_body=io.BytesIO(b"{}"),
-                fn_invoke_type="sync")
+                fn_invoke_type="detached")
             request_id = response.headers.get("opc-request-id") if getattr(response, "headers", None) else None
             suffix = f" opc-request-id={request_id}" if request_id else ""
-            print(f"Initial reconciliation completed for {function_id}.{suffix}")
-            body = getattr(response, "data", None)
-            if hasattr(body, "read"):
-                body = body.read()
-            if isinstance(body, bytes):
-                body = body.decode("utf-8", "replace")
-            if body:
-                try:
-                    payload = json.loads(body)
-                    tail = payload.get("output_tail") or []
-                    if tail:
-                        print("Initial reconciliation output:")
-                        print("\n".join(tail[-80:]))
-                    print(f"Initial reconciliation status: {payload.get('status')}; "
-                          f"duration: {payload.get('duration_seconds')}s")
-                except (TypeError, ValueError):
-                    print(str(body)[-4000:])
+            print(f"Initial reconciliation invocation accepted for {function_id}.{suffix}")
             return True
         except oci.exceptions.TransientServiceError as exc:
             if time.monotonic() >= deadline:

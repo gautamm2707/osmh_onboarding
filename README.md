@@ -15,9 +15,8 @@ at **22:00 IST / 16:30 UTC**. The laptop need not remain running after deploymen
 The scheduled invocation only reconciles instances; it does not redeploy itself.
 Deployment is local; before prompting, the selection phase checks current OSMH
 inventory so already registered instances are marked correctly. After a successful
-deployment, the deployer immediately runs one synchronous Function invocation for
-initial onboarding and prints the reconciliation output tail, then the daily
-schedule handles newly tagged instances.
+deployment, the deployer immediately starts one detached Function invocation for
+initial onboarding, then the daily schedule handles newly tagged instances.
 
 ## One-command setup with region selection
 
@@ -274,11 +273,12 @@ to the Function. `--skip-iam` maps to disabled IAM bootstrap and requires prior 
 
 ## 4. Verify in OCI
 
-After deployment, the first synchronous Function invocation is started automatically
-so the terminal can show the reconciliation result and output tail.
-If OCI Functions reports a temporary invoke-capacity error, the deployer retries
-and leaves the deployment/schedule intact even if the initial start is not
-accepted before timeout; rerun the same command or invoke manually.
+After deployment, the first detached Function invocation is started automatically.
+Detached mode avoids client-side timeout while OSMH reconciliation continues in
+OCI Functions. Check the Function invocation logs and OSMH instance/group status
+for completion. If OCI Functions reports a temporary invoke-capacity error, the
+deployer retries and leaves the deployment/schedule intact even if the initial
+start is not accepted before timeout; rerun the same command or invoke manually.
 Newly created instance-group membership can take about an hour to propagate, so
 initial guest registrations may remain pending and be completed by the next
 reconciliation. Terraform outputs the Function and schedule OCIDs. To start

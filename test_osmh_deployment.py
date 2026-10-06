@@ -242,16 +242,14 @@ class DeploymentTests(unittest.TestCase):
                 patch.object(deployment.oci.functions, "FunctionsInvokeClient") as factory:
             management.return_value.get_function.return_value = NS(data=NS(
                 invoke_endpoint="https://invoke.example.com"))
-            factory.return_value.invoke_function.return_value = NS(
-                headers={"opc-request-id": "req"},
-                data=json.dumps({"status": "reconciliation_pass_complete", "output_tail": ["done"]}))
+            factory.return_value.invoke_function.return_value = NS(headers={"opc-request-id": "req"})
             self.assertTrue(deployment.invoke_initial_reconciliation(
                 {"region": "us-ashburn-1"}, {}, "ocid1.fnfunc.oc1..fn"))
         self.assertEqual(factory.call_args.kwargs["service_endpoint"], "https://invoke.example.com")
         self.assertIn("timeout", factory.call_args.kwargs)
         call = factory.return_value.invoke_function.call_args
         self.assertEqual(call.args[0], "ocid1.fnfunc.oc1..fn")
-        self.assertEqual(call.kwargs["fn_invoke_type"], "sync")
+        self.assertEqual(call.kwargs["fn_invoke_type"], "detached")
         self.assertEqual(call.kwargs["invoke_function_body"].read(), b"{}")
 
     def test_initial_reconciliation_retries_transient_invoke_errors(self):
