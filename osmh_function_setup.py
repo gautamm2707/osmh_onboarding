@@ -80,8 +80,9 @@ def resolve_image(identity, config, kwargs, home, compartment_id, image=None):
 def choose(label, values, describe):
     if not values:
         if label == "Function application":
-            raise SystemExit("No available Function application found in the tenancy. "
-                             "Choose Create a new Function application.")
+            raise SystemExit("No available Function application found in the selected compartment tree. "
+                             "Choose Create a new Function application, pass --network-compartment-id "
+                             "to search another tree, or pass --function-application-id directly.")
         raise SystemExit(f"No available {label}. Choose a new Function network or --network-compartment-id.")
     print(f"Select {label}:")
     for index, value in enumerate(values, 1):
@@ -123,11 +124,12 @@ def select_network(args, identity, config, kwargs):
 
 
 def select_application(args, identity, config, kwargs):
-    """List existing Function applications across the tenancy in the home region."""
+    """List existing Function applications in the target tree (or explicit network compartment)."""
     client = oci.functions.FunctionsManagementClient({**config, "region": args.deployment_region}, **kwargs)
+    root = getattr(args, "network_compartment_id", None) or args.compartment_id
     from osmh_runtime import validate_compartment_tenancy
-    validate_compartment_tenancy(identity, config["tenancy"], config["tenancy"])
-    compartments = discover_compartments(identity, config["tenancy"])
+    validate_compartment_tenancy(identity, root, config["tenancy"])
+    compartments = discover_compartments(identity, root)
     by_id = {c.id: c for c in compartments}
     labels = {}
     for compartment in compartments:

@@ -88,12 +88,12 @@ class FunctionSetupTests(unittest.TestCase):
     @patch.object(setup, "list_call_get_all_results", side_effect=lambda fn, *a, **kw: fn(*a, **kw))
     def test_picker_reuses_active_function_application_in_home_region(self, _):
         child = "ocid1.compartment.oc1..child"
+        sibling = "ocid1.compartment.oc1..sibling"
         app_row = NS(id="ocid1.fnapp.oc1..app", display_name="ExistingOSMH", compartment_id=child,
                      lifecycle_state="ACTIVE")
         args = NS(compartment_id=ROOT, deployment_region="us-ashburn-1", network_compartment_id=None)
-        compartments = [NS(id=CONFIG["tenancy"], name="tenancy-root", compartment_id=None),
-                        NS(id=ROOT, name="Onboarding", compartment_id=CONFIG["tenancy"]),
-                        NS(id=child, name="SharedFunctions", compartment_id=CONFIG["tenancy"])]
+        compartments = [NS(id=ROOT, name="Onboarding", compartment_id=CONFIG["tenancy"]),
+                        NS(id=child, name="SharedFunctions", compartment_id=ROOT)]
         identity = Mock()
         with patch.object(setup, "discover_compartments", return_value=compartments) as discover, \
                 patch("osmh_runtime.validate_compartment_tenancy"), \
@@ -101,12 +101,15 @@ class FunctionSetupTests(unittest.TestCase):
                 patch("builtins.input", side_effect=["1"]):
             client = factory.return_value
             client.list_applications.side_effect = lambda compartment_id: NS(
-                data=[app_row, NS(lifecycle_state="DELETED")] if compartment_id == child else [])
+                data=([app_row, NS(lifecycle_state="DELETED")] if compartment_id == child else
+                      [NS(id="ignored", display_name="SiblingApp", compartment_id=sibling,
+                          lifecycle_state="ACTIVE")] if compartment_id == sibling else []))
             setup.select_application(args, identity, CONFIG, {})
         self.assertEqual(factory.call_args.args[0]["region"], "us-ashburn-1")
-        discover.assert_called_once_with(identity, CONFIG["tenancy"])
+        discover.assert_called_once_with(identity, ROOT)
         self.assertEqual(args.function_application_id, "ocid1.fnapp.oc1..app")
-        self.assertIn("tenancy-root / SharedFunctions", self.output.getvalue())
+        self.assertIn("Onboarding / SharedFunctions", self.output.getvalue())
+        self.assertNotIn("SiblingApp", self.output.getvalue())
 
     def test_validate_application_rejects_inactive_app(self):
         args = NS(function_application_id="ocid1.fnapp.oc1..app", deployment_region="us-ashburn-1")
