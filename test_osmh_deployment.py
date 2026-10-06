@@ -106,6 +106,38 @@ class DeploymentTests(unittest.TestCase):
             self.assertTrue(args.create_network)
             self.assertEqual(args.subnet_ids, "")
 
+    def test_deployment_mode_preserves_existing_reused_app_to_avoid_function_replacement(self):
+        args = NS(application_id="ocid1.fnapp.oc1..new", subnet_ids="", create_network=False)
+        previous = {"mode": "application_id", "application_id": "ocid1.fnapp.oc1..old",
+                    "subnet_ids": [], "create_network": False}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "terraform.tfstate").write_text(json.dumps({"resources": [
+                {"type": "oci_functions_function"},
+            ]}))
+            (root / "deployment-mode.json").write_text(json.dumps(previous))
+            mode = deployment.reconcile_deployment_mode(args, root)
+        self.assertEqual(mode, previous)
+        self.assertEqual(args.application_id, "ocid1.fnapp.oc1..old")
+        self.assertFalse(args.create_network)
+        self.assertEqual(args.subnet_ids, "")
+
+    def test_deployment_mode_preserves_existing_subnets_to_avoid_function_replacement(self):
+        args = NS(application_id="", subnet_ids="ocid1.subnet.oc1..new", create_network=False)
+        previous = {"mode": "subnet_ids", "application_id": "",
+                    "subnet_ids": ["ocid1.subnet.oc1..old"], "create_network": False}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "terraform.tfstate").write_text(json.dumps({"resources": [
+                {"type": "oci_functions_function"},
+            ]}))
+            (root / "deployment-mode.json").write_text(json.dumps(previous))
+            mode = deployment.reconcile_deployment_mode(args, root)
+        self.assertEqual(mode, previous)
+        self.assertEqual(args.application_id, "")
+        self.assertFalse(args.create_network)
+        self.assertEqual(args.subnet_ids, "ocid1.subnet.oc1..old")
+
     @patch.object(chain.subprocess, "run")
     def test_all_regions_passes_future_subscription_discovery(self, run):
         args = self.args("--all-regions", "--deployment-region", "us-ashburn-1")

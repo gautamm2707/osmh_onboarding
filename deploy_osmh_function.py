@@ -167,6 +167,13 @@ def reconcile_deployment_mode(args, state_dir):
             return current
     previous = json.loads(mode_file.read_text())
     if previous.get("mode") == current["mode"]:
+        if previous != current:
+            print("Existing deployment state already manages Function infrastructure; "
+                  "preserving the previous Function application/network selection to avoid replacement.")
+            args.application_id = previous.get("application_id", "")
+            args.create_network = previous.get("mode") == "create_network"
+            args.subnet_ids = ",".join(previous.get("subnet_ids") or [])
+            return previous
         mode_file.write_text(json.dumps(current, sort_keys=True, indent=2))
         return current
     print("Existing deployment state was created with "
