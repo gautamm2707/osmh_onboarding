@@ -138,6 +138,21 @@ def deployment_mode(args):
     return "subnet_ids"
 
 
+def state_function_application_id(state_file):
+    try:
+        state = json.loads(state_file.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    for resource in state.get("resources", []):
+        if resource.get("type") != "oci_functions_function" or resource.get("name") != "worker":
+            continue
+        for instance in resource.get("instances", []):
+            app_id = (instance.get("attributes") or {}).get("application_id")
+            if app_id:
+                return app_id
+    return None
+
+
 def reconcile_deployment_mode(args, state_dir):
     mode_file = state_dir / "deployment-mode.json"
     current = {
@@ -150,6 +165,17 @@ def reconcile_deployment_mode(args, state_dir):
     if not state_file.exists():
         mode_file.write_text(json.dumps(current, sort_keys=True, indent=2))
         return current
+    state_app = state_function_application_id(state_file)
+    if state_app and current["application_id"] and current["application_id"] != state_app:
+        previous = {"mode": "application_id", "application_id": state_app,
+                    "subnet_ids": [], "create_network": False}
+        print("Existing Terraform state already manages a Function in "
+              f"{state_app}; preserving that Function application to avoid replacement.")
+        mode_file.write_text(json.dumps(previous, sort_keys=True, indent=2))
+        args.application_id = state_app
+        args.create_network = False
+        args.subnet_ids = ""
+        return previous
     if not mode_file.exists():
         try:
             state = json.loads(state_file.read_text())

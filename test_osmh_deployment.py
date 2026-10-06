@@ -122,6 +122,28 @@ class DeploymentTests(unittest.TestCase):
         self.assertFalse(args.create_network)
         self.assertEqual(args.subnet_ids, "")
 
+    def test_deployment_mode_recovers_function_app_from_state_when_mode_file_is_stale(self):
+        args = NS(application_id="ocid1.fnapp.oc1..new", subnet_ids="", create_network=False)
+        stale = {"mode": "application_id", "application_id": "ocid1.fnapp.oc1..new",
+                 "subnet_ids": [], "create_network": False}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "terraform.tfstate").write_text(json.dumps({"resources": [{
+                "type": "oci_functions_function",
+                "name": "worker",
+                "instances": [{"attributes": {"application_id": "ocid1.fnapp.oc1..state"}}],
+            }]}))
+            (root / "deployment-mode.json").write_text(json.dumps(stale))
+            mode = deployment.reconcile_deployment_mode(args, root)
+            written = json.loads((root / "deployment-mode.json").read_text())
+        expected = {"mode": "application_id", "application_id": "ocid1.fnapp.oc1..state",
+                    "subnet_ids": [], "create_network": False}
+        self.assertEqual(mode, expected)
+        self.assertEqual(written, expected)
+        self.assertEqual(args.application_id, "ocid1.fnapp.oc1..state")
+        self.assertFalse(args.create_network)
+        self.assertEqual(args.subnet_ids, "")
+
     def test_deployment_mode_preserves_existing_subnets_to_avoid_function_replacement(self):
         args = NS(application_id="", subnet_ids="ocid1.subnet.oc1..new", create_network=False)
         previous = {"mode": "subnet_ids", "application_id": "",
