@@ -12,6 +12,16 @@ def enabled(args):
             and not getattr(args, "tag_only", False))
 
 
+def select_new_application_network(args, identity, config, client_kwargs):
+    mode = setup.choose("Function network option", ["existing", "new"],
+                        lambda value: "Select an existing VCN/subnet" if value == "existing" else
+                        "Create a new private VCN, subnet and NAT gateway")
+    if mode == "existing":
+        setup.select_network(args, identity, config, client_kwargs or {})
+    else:
+        args.create_function_network = True
+
+
 def prepare(args, config, regions, identity=None, client_kwargs=None):
     """Resolve local deployment choices before tagging changes any instances."""
     if not enabled(args):
@@ -47,15 +57,10 @@ def prepare(args, config, regions, identity=None, client_kwargs=None):
                                 lambda value: "Reuse an existing Function application" if value == "existing" else
                                 "Create a new Function application")
         if app_mode == "existing":
-            setup.select_application(args, identity, config, client_kwargs or {})
+            if not setup.select_application(args, identity, config, client_kwargs or {}):
+                select_new_application_network(args, identity, config, client_kwargs)
         else:
-            mode = setup.choose("Function network option", ["existing", "new"],
-                                lambda value: "Select an existing VCN/subnet" if value == "existing" else
-                                "Create a new private VCN, subnet and NAT gateway")
-            if mode == "existing":
-                setup.select_network(args, identity, config, client_kwargs or {})
-            else:
-                args.create_function_network = True
+            select_new_application_network(args, identity, config, client_kwargs)
     setup.validate_application(args, config, client_kwargs or {})
     from deploy_osmh_function import validate_image
     validate_image(args.function_image)

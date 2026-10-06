@@ -111,6 +111,20 @@ class FunctionSetupTests(unittest.TestCase):
         self.assertIn("Onboarding / SharedFunctions", self.output.getvalue())
         self.assertNotIn("SiblingApp", self.output.getvalue())
 
+    @patch.object(setup, "list_call_get_all_results", side_effect=lambda fn, *a, **kw: fn(*a, **kw))
+    def test_picker_returns_false_when_no_function_application_exists(self, _):
+        args = NS(compartment_id=ROOT, deployment_region="us-ashburn-1", network_compartment_id=None)
+        identity = Mock()
+        with patch.object(setup, "discover_compartments", return_value=[NS(id=ROOT, name="Root")]), \
+                patch("osmh_runtime.validate_compartment_tenancy"), \
+                patch.object(setup.oci.functions, "FunctionsManagementClient") as factory, \
+                patch("builtins.input") as prompt:
+            factory.return_value.list_applications.return_value = NS(data=[])
+            self.assertFalse(setup.select_application(args, identity, CONFIG, {}))
+        prompt.assert_not_called()
+        self.assertFalse(hasattr(args, "function_application_id"))
+        self.assertIn("continuing with new Function application setup", self.output.getvalue())
+
     def test_validate_application_rejects_inactive_app(self):
         args = NS(function_application_id="ocid1.fnapp.oc1..app", deployment_region="us-ashburn-1")
         with patch.object(setup.oci.functions, "FunctionsManagementClient") as factory:

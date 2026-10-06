@@ -73,6 +73,19 @@ class DeploymentTests(unittest.TestCase):
         self.assertNotIn("--subnet-ids", command)
 
     @patch.object(chain.subprocess, "run")
+    @patch.object(chain.shutil, "which", return_value="tool")
+    def test_prepare_falls_back_to_new_function_app_when_reuse_has_no_apps(self, which, run):
+        args = app.arguments([ROOT, "--all", "--function-image", IMAGE])
+        with patch.object(chain.setup, "select_application", return_value=False) as select_app, \
+                patch.object(chain.setup, "select_network") as select_network, \
+                patch.object(chain.sys.stdin, "isatty", return_value=True), \
+                patch("builtins.input", side_effect=["1", "2"]):
+            chain.prepare(args, {"tenancy": TENANCY}, ["us-ashburn-1"], Mock(), {})
+        select_app.assert_called_once()
+        select_network.assert_not_called()
+        self.assertTrue(args.create_function_network)
+
+    @patch.object(chain.subprocess, "run")
     def test_chain_passes_optional_invocation_logging(self, run):
         args = self.args("--enable-function-logging")
         args.deployment_region = "us-ashburn-1"

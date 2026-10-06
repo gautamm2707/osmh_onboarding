@@ -79,10 +79,6 @@ def resolve_image(identity, config, kwargs, home, compartment_id, image=None):
 
 def choose(label, values, describe):
     if not values:
-        if label == "Function application":
-            raise SystemExit("No available Function application found in the selected compartment tree. "
-                             "Choose Create a new Function application, pass --network-compartment-id "
-                             "to search another tree, or pass --function-application-id directly.")
         raise SystemExit(f"No available {label}. Choose a new Function network or --network-compartment-id.")
     print(f"Select {label}:")
     for index, value in enumerate(values, 1):
@@ -143,9 +139,14 @@ def select_application(args, identity, config, kwargs):
     for compartment in compartments:
         apps.extend(a for a in list_call_get_all_results(client.list_applications, compartment.id).data
                     if getattr(a, "lifecycle_state", "ACTIVE") == "ACTIVE")
+    if not apps:
+        print("No available Function application found in the selected compartment tree; "
+              "continuing with new Function application setup.")
+        return False
     app = choose("Function application", sorted(apps, key=lambda a: (a.display_name or "", a.id)),
                  lambda a: f"{a.display_name} | {labels.get(a.compartment_id, a.compartment_id)} | {a.id}")
     args.function_application_id = app.id
+    return True
 
 
 def validate_application(args, config, kwargs):
