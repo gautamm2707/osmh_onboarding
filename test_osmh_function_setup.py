@@ -80,10 +80,36 @@ class FunctionSetupTests(unittest.TestCase):
             client = factory.return_value
             client.list_vcns.return_value = NS(data=[vcn, NS(lifecycle_state="TERMINATING")])
             client.list_subnets.return_value = NS(data=[subnet, NS(lifecycle_state="TERMINATING")])
-            setup.select_network(args, Mock(), CONFIG, {})
+            self.assertTrue(setup.select_network(args, Mock(), CONFIG, {}))
         self.assertEqual(factory.call_args.args[0]["region"], "us-ashburn-1")
         self.assertEqual(args.function_subnet_ids, "subnet")
         client.list_subnets.assert_called_once_with(ROOT, vcn_id="vcn")
+
+    @patch.object(setup, "list_call_get_all_results", side_effect=lambda fn, *a, **kw: fn(*a, **kw))
+    def test_network_picker_returns_false_when_no_vcn_exists(self, _):
+        args = NS(compartment_id=ROOT, deployment_region="us-ashburn-1", network_compartment_id=None)
+        with patch.object(setup, "discover_compartments", return_value=[NS(id=ROOT, name="Root")]), \
+                patch("osmh_runtime.validate_compartment_tenancy"), \
+                patch.object(setup.oci.core, "VirtualNetworkClient") as factory, \
+                patch("builtins.input") as prompt:
+            factory.return_value.list_vcns.return_value = NS(data=[])
+            self.assertFalse(setup.select_network(args, Mock(), CONFIG, {}))
+        prompt.assert_not_called()
+        self.assertIn("continuing with new private Function network setup", self.output.getvalue())
+
+    @patch.object(setup, "list_call_get_all_results", side_effect=lambda fn, *a, **kw: fn(*a, **kw))
+    def test_network_picker_returns_false_when_no_subnet_exists(self, _):
+        vcn = NS(id="vcn", display_name="Shared", compartment_id=ROOT, lifecycle_state="AVAILABLE")
+        args = NS(compartment_id=ROOT, deployment_region="us-ashburn-1", network_compartment_id=None)
+        with patch.object(setup, "discover_compartments", return_value=[NS(id=ROOT, name="Root")]), \
+                patch("osmh_runtime.validate_compartment_tenancy"), \
+                patch.object(setup.oci.core, "VirtualNetworkClient") as factory, \
+                patch("builtins.input", side_effect=["1"]):
+            client = factory.return_value
+            client.list_vcns.return_value = NS(data=[vcn])
+            client.list_subnets.return_value = NS(data=[])
+            self.assertFalse(setup.select_network(args, Mock(), CONFIG, {}))
+        self.assertIn("continuing with new private Function network setup", self.output.getvalue())
 
     @patch.object(setup, "list_call_get_all_results", side_effect=lambda fn, *a, **kw: fn(*a, **kw))
     def test_picker_reuses_active_function_application_in_home_region(self, _):

@@ -17,7 +17,8 @@ def select_new_application_network(args, identity, config, client_kwargs):
                         lambda value: "Select an existing VCN/subnet" if value == "existing" else
                         "Create a new private VCN, subnet and NAT gateway")
     if mode == "existing":
-        setup.select_network(args, identity, config, client_kwargs or {})
+        if not setup.select_network(args, identity, config, client_kwargs or {}):
+            args.create_function_network = True
     else:
         args.create_function_network = True
 

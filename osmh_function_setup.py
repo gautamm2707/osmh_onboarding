@@ -107,16 +107,25 @@ def select_network(args, identity, config, kwargs):
     for compartment in compartments:
         vcns.extend(v for v in list_call_get_all_results(network.list_vcns, compartment.id).data
                     if v.lifecycle_state == "AVAILABLE")
+    if not vcns:
+        print("No available VCN found in the selected compartment tree; "
+              "continuing with new private Function network setup.")
+        return False
     vcn = choose("VCN", sorted(vcns, key=lambda v: (v.display_name or "", v.id)),
                  lambda v: f"{v.display_name} | {labels.get(v.compartment_id, v.compartment_id)} | {v.id}")
     subnets = []
     for compartment in compartments:
         subnets.extend(s for s in list_call_get_all_results(network.list_subnets, compartment.id, vcn_id=vcn.id).data
                        if s.lifecycle_state == "AVAILABLE" and s.vcn_id == vcn.id)
+    if not subnets:
+        print(f"No available subnet found in VCN {vcn.display_name or vcn.id}; "
+              "continuing with new private Function network setup.")
+        return False
     subnet = choose("subnet", sorted(subnets, key=lambda s: (s.display_name or "", s.id)),
                     lambda s: f"{s.display_name} | {s.cidr_block} | "
                     f"{'private' if s.prohibit_public_ip_on_vnic else 'public'} | {s.id}")
     args.function_subnet_ids = subnet.id
+    return True
 
 
 def select_application(args, identity, config, kwargs):
