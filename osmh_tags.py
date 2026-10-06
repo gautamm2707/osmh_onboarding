@@ -49,6 +49,8 @@ def _find_namespace(identity, compartment_id, name):
 def ensure_tag_namespace(args, identity):
     name = namespace_name(args.compartment_id, args.tag_namespace)
     namespace = _find_namespace(identity, args.compartment_id, name)
+    conflict_not_visible = False
+    reused_after_conflict = False
     if not namespace:
         print(f"{'[dry-run] ' if args.dry_run else ''}create tag namespace {name} in {args.compartment_id}")
         if args.dry_run:
@@ -60,9 +62,24 @@ def ensure_tag_namespace(args, identity):
         except oci.exceptions.ServiceError as exc:
             if getattr(exc, "status", None) != 409 or getattr(exc, "code", None) != "TagNamespaceAlreadyExists":
                 raise
-            namespace = _find_namespace(identity, args.compartment_id, name)
+            deadline = time.monotonic() + min(max(0, getattr(args, "tag_propagation_timeout", 180)), 60)
+            while True:
+                namespace = _find_namespace(identity, args.compartment_id, name)
+                if namespace or time.monotonic() >= deadline:
+                    break
+                print(f"Tag namespace {name} already exists but is not visible yet; retrying lookup...")
+                time.sleep(10)
             if not namespace:
-                raise
+                print(f"Tag namespace {name} already exists but OCI did not return it in list results. "
+                      "Continuing with the namespace name; instance tag validation will confirm whether "
+                      f"{name}.{TAG_KEY} is usable.")
+                conflict_not_visible = True
+            else:
+                reused_after_conflict = True
+        if conflict_not_visible:
+            args.tag_namespace = name
+            return name
+        if reused_after_conflict:
             print(f"Tag namespace {name} already exists; reusing it.")
         name = namespace.name
     tags = list_call_get_all_results(identity.list_tags, namespace.id).data
