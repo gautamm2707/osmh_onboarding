@@ -114,6 +114,20 @@ class TagTests(unittest.TestCase):
         identity.create_tag.assert_not_called()
 
     @patch.object(tags, "list_call_get_all_results", side_effect=pages)
+    def test_create_namespace_conflict_is_relisted_and_reused(self, _):
+        identity = Mock()
+        namespace = NS(id="ns", name="NS", is_retired=False, lifecycle_state="ACTIVE")
+        identity.list_tag_namespaces.side_effect = [response([]), response([namespace])]
+        identity.create_tag_namespace.side_effect = oci.exceptions.ServiceError(
+            409, "TagNamespaceAlreadyExists", {}, "Tag namespace already exists")
+        identity.list_tags.return_value = response([NS(name="managedby", is_retired=False,
+                                                     validator=NS(values=["osmanagementhub"]))])
+        identity.get_tag.return_value = response(NS(name="managedby", is_retired=False,
+                                                   validator=NS(values=["osmanagementhub"])))
+        tags.ensure_tag_namespace(NS(compartment_id=ROOT, tag_namespace="NS", dry_run=False), identity)
+        identity.create_tag.assert_not_called()
+
+    @patch.object(tags, "list_call_get_all_results", side_effect=pages)
     def test_existing_tag_validator_rejects_incompatible_value(self, _):
         identity = Mock()
         identity.list_tag_namespaces.return_value = response([NS(id="ns", name="NS", is_retired=False)])

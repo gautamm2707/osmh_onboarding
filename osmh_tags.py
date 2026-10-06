@@ -32,10 +32,9 @@ def is_opted_in(instance, namespace):
     return (tags.get(namespace) or {}).get(TAG_KEY) == TAG_VALUE
 
 
-def ensure_tag_namespace(args, identity):
-    name = namespace_name(args.compartment_id, args.tag_namespace)
+def _find_namespace(identity, compartment_id, name):
     existing = list_call_get_all_results(
-        identity.list_tag_namespaces, args.compartment_id).data
+        identity.list_tag_namespaces, compartment_id).data
     matches = [n for n in existing if n.name.casefold() == name.casefold()
                and getattr(n, "lifecycle_state", "ACTIVE") != "DELETED"]
     if len(matches) > 1:
@@ -44,13 +43,27 @@ def ensure_tag_namespace(args, identity):
     if namespace and (namespace.name != name or namespace.is_retired
                       or getattr(namespace, "lifecycle_state", "ACTIVE") != "ACTIVE"):
         raise SystemExit(f"Tag namespace {name} is retired, inactive or uses different capitalization.")
+    return namespace
+
+
+def ensure_tag_namespace(args, identity):
+    name = namespace_name(args.compartment_id, args.tag_namespace)
+    namespace = _find_namespace(identity, args.compartment_id, name)
     if not namespace:
         print(f"{'[dry-run] ' if args.dry_run else ''}create tag namespace {name} in {args.compartment_id}")
         if args.dry_run:
             print(f"[dry-run] create tag key {TAG_KEY}; allowed value {TAG_VALUE}")
             return name
-        namespace = identity.create_tag_namespace(oci.identity.models.CreateTagNamespaceDetails(
-            compartment_id=args.compartment_id, name=name, description=TAG_DESCRIPTION)).data
+        try:
+            namespace = identity.create_tag_namespace(oci.identity.models.CreateTagNamespaceDetails(
+                compartment_id=args.compartment_id, name=name, description=TAG_DESCRIPTION)).data
+        except oci.exceptions.ServiceError as exc:
+            if getattr(exc, "status", None) != 409 or getattr(exc, "code", None) != "TagNamespaceAlreadyExists":
+                raise
+            namespace = _find_namespace(identity, args.compartment_id, name)
+            if not namespace:
+                raise
+            print(f"Tag namespace {name} already exists; reusing it.")
         name = namespace.name
     tags = list_call_get_all_results(identity.list_tags, namespace.id).data
     tag = next((t for t in tags if t.name.casefold() == TAG_KEY), None)
