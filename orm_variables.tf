@@ -146,8 +146,8 @@ variable "invoke_after_deploy" {
 }
 variable "iam_wait_seconds" {
   type        = number
-  default     = 600
-  description = "Initial delay for IAM and dynamic-group propagation. OCI can require five to ten minutes before a new DevOps principal is authorized in the deployment region."
+  default     = 3600
+  description = "Initial delay for IAM and dynamic-group propagation. OCI documents that a new or changed dynamic-group rule can require about one hour before its resource principal is authorized."
   validation {
     condition     = var.iam_wait_seconds >= 60 && var.iam_wait_seconds <= 3600 && floor(var.iam_wait_seconds) == var.iam_wait_seconds
     error_message = "Use an integer from 60 to 3600 seconds."

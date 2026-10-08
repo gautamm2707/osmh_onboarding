@@ -1,7 +1,7 @@
 title: Onboard in OSMH
 description: Deploy scheduled tag-based OS Management Hub onboarding in your OCI tenancy.
 schemaVersion: 1.1.0
-version: "1.8"
+version: "1.9"
 locale: en
 informationalText: Select the deployment region and target compartment below. The target compartment can differ from the compartment that stores the stack. Apply validates and opts in selected instances. Daily runs reconcile tagged instances across the target compartment tree.
 variableGroups:
@@ -279,8 +279,8 @@ variables:
   iam_wait_seconds:
     type: integer
     title: Initial IAM propagation wait in seconds
-    description: OCI IAM can require five to ten minutes to authorize newly created DevOps and Function resource principals in the deployment region.
-    default: 600
+    description: OCI documents that new or changed dynamic-group rules can require about one hour to authorize their resource principals. The first Apply waits before starting the build.
+    default: 3600
     minimum: 60
     maximum: 3600
 outputs:

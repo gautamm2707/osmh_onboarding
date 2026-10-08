@@ -87,6 +87,10 @@ run "cloud_build_deployment" {
     error_message = "Cloud building must create one OL8 build and a private image repository."
   }
   assert {
+    condition     = length(oci_identity_dynamic_group.build_pipeline) == 1 && length(oci_identity_dynamic_group.connection) == 1 && length(oci_identity_policy.build_pipeline) == 1 && length(oci_identity_policy.connection) == 1
+    error_message = "Cloud building must isolate the exact pipeline and connection in separate dynamic groups and policies."
+  }
+  assert {
     condition     = endswith(output.function_image, ":0123456789ab-1")
     error_message = "Image version must identify the source commit and build revision."
   }

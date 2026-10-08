@@ -51,31 +51,65 @@ resource "oci_artifacts_container_repository" "worker" {
   lifecycle { ignore_changes = [display_name] }
   is_public = false
 }
-resource "oci_identity_dynamic_group" "build" {
-  provider       = oci.home
-  count          = var.build_function_image ? 1 : 0
-  compartment_id = var.tenancy_ocid
-  name           = "${local.name}-build"
-  lifecycle { ignore_changes = [name] }
-  description   = "Only this OSMH build pipeline and GitHub connection"
-  matching_rule = "ANY {ALL {resource.type = 'devopsbuildpipeline', resource.id = '${oci_devops_build_pipeline.image[0].id}'}, ALL {resource.type = 'devopsconnection', resource.id = '${oci_devops_connection.github[0].id}'}}"
+moved {
+  from = oci_identity_dynamic_group.build[0]
+  to   = oci_identity_dynamic_group.build_pipeline[0]
 }
-resource "oci_identity_policy" "build" {
+
+moved {
+  from = oci_identity_policy.build[0]
+  to   = oci_identity_policy.build_pipeline[0]
+}
+
+resource "oci_identity_dynamic_group" "build_pipeline" {
   provider       = oci.home
   count          = var.build_function_image ? 1 : 0
   compartment_id = var.tenancy_ocid
   name           = "${local.name}-build"
   lifecycle { ignore_changes = [name] }
-  description = "Read one GitHub secret and deliver the OSMH image to one private repository"
+  description   = "Only this OSMH build pipeline"
+  matching_rule = "ALL {resource.type = 'devopsbuildpipeline', resource.id = '${oci_devops_build_pipeline.image[0].id}'}"
+}
+
+resource "oci_identity_dynamic_group" "connection" {
+  provider       = oci.home
+  count          = var.build_function_image ? 1 : 0
+  compartment_id = var.tenancy_ocid
+  name           = "${local.name}-connection"
+  lifecycle { ignore_changes = [name] }
+  description   = "Only this OSMH GitHub connection"
+  matching_rule = "ALL {resource.type = 'devopsconnection', resource.id = '${oci_devops_connection.github[0].id}'}"
+}
+
+resource "oci_identity_policy" "build_pipeline" {
+  provider       = oci.home
+  count          = var.build_function_image ? 1 : 0
+  compartment_id = var.tenancy_ocid
+  name           = "${local.name}-build"
+  lifecycle { ignore_changes = [name] }
+  description = "Authorize the exact OSMH build pipeline and its regional delivery resources"
   statements = [
-    # OCI DevOps evaluates source retrieval as both the build-pipeline and
-    # external-connection principals. These documented compartment-scoped
-    # grants work for both authorization checks; target-resource conditions
-    # are not consistently populated while DevOps fetches an external source.
-    "Allow dynamic-group id ${oci_identity_dynamic_group.build[0].id} to read secret-family ${local.scope}",
-    "Allow dynamic-group id ${oci_identity_dynamic_group.build[0].id} to manage devops-family ${local.scope}",
-    "Allow dynamic-group id ${oci_identity_dynamic_group.build[0].id} to use ons-topics ${local.scope}",
-    "Allow dynamic-group id ${oci_identity_dynamic_group.build[0].id} to manage repos ${local.scope}"
+    # Source retrieval is evaluated before the managed build runner starts.
+    # OCI's RelatedResourceNotAuthorizedOrNotFound guidance requires the
+    # build-pipeline principal to manage devops-family at tenancy scope.
+    "Allow dynamic-group id ${oci_identity_dynamic_group.build_pipeline[0].id} to manage devops-family in tenancy",
+    "Allow dynamic-group id ${oci_identity_dynamic_group.build_pipeline[0].id} to use ons-topics ${local.scope}",
+    "Allow dynamic-group id ${oci_identity_dynamic_group.build_pipeline[0].id} to manage repos ${local.scope}"
+  ]
+}
+
+resource "oci_identity_policy" "connection" {
+  provider       = oci.home
+  count          = var.build_function_image ? 1 : 0
+  compartment_id = var.tenancy_ocid
+  name           = "${local.name}-connection"
+  lifecycle { ignore_changes = [name] }
+  description = "Allow only the exact OSMH GitHub connection to read Vault secrets"
+  statements = [
+    # OCI DevOps does not consistently populate a specific secret target while
+    # resolving external source files, so its documented failure guidance uses
+    # secret-family at tenancy scope for the connection principal.
+    "Allow dynamic-group id ${oci_identity_dynamic_group.connection[0].id} to read secret-family in tenancy"
   ]
 }
 resource "oci_devops_deploy_artifact" "image" {
@@ -128,11 +162,14 @@ resource "oci_devops_build_pipeline_stage" "deliver" {
 }
 resource "terraform_data" "build_iam" {
   count      = var.build_function_image ? 1 : 0
-  depends_on = [oci_identity_policy.build]
+  depends_on = [oci_identity_policy.build_pipeline, oci_identity_policy.connection]
   provisioner "local-exec" {
     command = "sleep ${var.iam_wait_seconds}"
   }
-  triggers_replace = { policy = sha256(jsonencode(oci_identity_policy.build[0].statements)) }
+  triggers_replace = {
+    build_pipeline_policy = sha256(jsonencode(oci_identity_policy.build_pipeline[0].statements))
+    connection_policy     = sha256(jsonencode(oci_identity_policy.connection[0].statements))
+  }
 }
 resource "terraform_data" "build_version" {
   count = var.build_function_image ? 1 : 0
