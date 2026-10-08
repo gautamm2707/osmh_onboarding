@@ -73,7 +73,7 @@ Fields named `auth` (default `APIKey`), `bootstrap_iam`, `compartment_id`, and `
 To load the updated form in the Create stack wizard:
 
 1. For the published package, cancel the uncreated wizard and open **Onboard in OSMH** again. To upload a local copy instead, select **Previous** to return to **Stack information**.
-2. Under configuration source, select **My configuration → .Zip file** and replace the old source with **`osmh-resource-manager-console-v1.5.zip`** from the project folder. This is a visible copy of the generated `.deployment/osmh-resource-manager.zip`.
+2. Under configuration source, select **My configuration → .Zip file** and replace the old source with **`osmh-resource-manager-console-v1.6.zip`** from the project folder. This is a visible copy of the generated `.deployment/osmh-resource-manager.zip`.
 3. If a working directory is requested, use the ZIP root (empty/default). The ZIP has `schema.yaml` and `orm_*.tf` directly at its root and excludes `deployment/`.
 4. Select **Next**. The first group should be **Compartment and Compute selection**, with **Deployment and onboarding compartment** and a dropdown-list control for **Compute instances to onboard**.
 5. If the wizard retains the previous source, cancel the uncreated stack and start a new Create stack wizard with this ZIP.

@@ -68,6 +68,11 @@ class ResourceManagerPackageTests(unittest.TestCase):
         self.assertNotIn("title: Function image", schema)
         self.assertNotIn("ocir_auth_token", schema.casefold())
 
+    def test_cloud_build_uses_supported_runner_and_repository_settings(self):
+        build = (ROOT / "orm_build.tf").read_text()
+        self.assertIn('image                              = "OL8_X86_64_STANDARD_10"', build)
+        self.assertNotIn("is_immutable", build)
+
 
 if __name__ == "__main__":
     unittest.main()

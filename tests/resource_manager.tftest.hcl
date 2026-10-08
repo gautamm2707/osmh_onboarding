@@ -77,8 +77,8 @@ run "cloud_build_deployment" {
     github_token_secret_id = "ocid1.vaultsecret.oc1.iad.test"
   }
   assert {
-    condition     = length(oci_devops_build_run.image) == 1 && oci_artifacts_container_repository.worker[0].is_public == false && oci_artifacts_container_repository.worker[0].is_immutable == true
-    error_message = "Cloud building must create one build and a private immutable image repository."
+    condition     = length(oci_devops_build_run.image) == 1 && oci_artifacts_container_repository.worker[0].is_public == false && oci_devops_build_pipeline_stage.build[0].image == "OL8_X86_64_STANDARD_10"
+    error_message = "Cloud building must create one OL8 build and a private image repository."
   }
   assert {
     condition     = endswith(output.function_image, ":0123456789ab-1")

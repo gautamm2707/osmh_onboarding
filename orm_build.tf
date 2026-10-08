@@ -47,7 +47,6 @@ resource "oci_artifacts_container_repository" "worker" {
   compartment_id = local.target_compartment_id
   display_name   = local.repository
   is_public      = false
-  is_immutable   = true
 }
 resource "oci_identity_dynamic_group" "build" {
   provider       = oci.home
@@ -86,7 +85,7 @@ resource "oci_devops_build_pipeline_stage" "build" {
   build_pipeline_id                  = oci_devops_build_pipeline.image[0].id
   display_name                       = "Build Linux AMD64 function"
   build_pipeline_stage_type          = "BUILD"
-  image                              = "OL8_X86_64_STANDARD_1_0"
+  image                              = "OL8_X86_64_STANDARD_10"
   build_spec_file                    = "build_spec.yaml"
   primary_build_source               = "osmh"
   stage_execution_timeout_in_seconds = 1800
