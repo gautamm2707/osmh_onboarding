@@ -62,10 +62,6 @@ resource "terraform_data" "validate" {
       error_message = "Choose a new network or an existing subnet for a new application; supply an application OCID when reusing an application."
     }
     precondition {
-      condition     = var.console_region == "" || var.console_region == var.region
-      error_message = "Switch the OCI Console region to the selected deployment region, then reopen Configure variables so the resource dropdowns load that region."
-    }
-    precondition {
       condition     = !local.create_application || var.create_network || var.existing_subnet_id == "" || var.existing_vcn_id != ""
       error_message = "Choose the VCN that contains the selected existing subnet."
     }

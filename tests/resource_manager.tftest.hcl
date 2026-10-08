@@ -96,10 +96,10 @@ run "deploy_in_non_home_region" {
     error_message = "Default workload scope must follow the deployment region."
   }
 }
-run "reject_mismatched_console_region" {
+run "reject_unresolved_region_placeholder" {
   command = plan
-  variables { console_region = "us-phoenix-1" }
-  expect_failures = [terraform_data.validate]
+  variables { region = "$${session.region}" }
+  expect_failures = [var.region]
 }
 run "reject_wrong_registry_tenancy" {
   command = plan

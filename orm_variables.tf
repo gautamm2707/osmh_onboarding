@@ -23,7 +23,14 @@ variable "target_compartment_ocid" {
     error_message = "Use a compartment or tenancy OCID."
   }
 }
-variable "region" { type = string }
+variable "region" {
+  type        = string
+  description = "OCI region where the Function and supporting resources are deployed."
+  validation {
+    condition     = can(regex("^[a-z]{2}-[a-z0-9-]+-[0-9]+$", var.region))
+    error_message = "Select a valid OCI region such as us-ashburn-1."
+  }
+}
 variable "workload_regions" {
   type        = string
   default     = ""
@@ -146,11 +153,6 @@ variable "iam_wait_seconds" {
   }
 }
 
-variable "console_region" {
-  type        = string
-  default     = ""
-  description = "Console session region captured by schema.yaml; empty for non-Console callers."
-}
 variable "selected_instance_ids" {
   type        = list(string)
   default     = []

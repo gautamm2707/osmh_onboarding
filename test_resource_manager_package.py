@@ -60,7 +60,10 @@ class ResourceManagerPackageTests(unittest.TestCase):
         self.assertIn("compartment_ocid:\n    type: string\n    visible: false", schema)
         self.assertIn("type: oci:core:instance:id", schema)
         self.assertIn("type: oci:kms:secret:id", schema)
-        self.assertIn("default: ${session.region}\n    visible: false", schema)
+        self.assertIn("region:\n    type: oci:identity:region:name", schema)
+        self.assertIn("title: Region", schema)
+        self.assertNotIn("session.region", schema)
+        self.assertNotIn("console_region", schema)
         self.assertNotIn("title: Function image", schema)
         self.assertNotIn("ocir_auth_token", schema.casefold())
 

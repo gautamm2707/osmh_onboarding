@@ -1,12 +1,12 @@
 title: Onboard in OSMH
 description: Deploy scheduled tag-based OS Management Hub onboarding in your OCI tenancy.
 schemaVersion: 1.1.0
-version: "1.3"
+version: "1.4"
 locale: en
-informationalText: The stack deploys in the current OCI Console region and in the target compartment selected below, which can differ from the compartment that stores the stack. Apply validates and opts in selected instances. Daily runs reconcile tagged instances across the target compartment tree.
+informationalText: Select the deployment region and target compartment below. The target compartment can differ from the compartment that stores the stack. Apply validates and opts in selected instances. Daily runs reconcile tagged instances across the target compartment tree.
 variableGroups:
-  - title: Compartment and Compute selection
-    variables: ['${target_compartment_ocid}', '${selected_instance_ids}']
+  - title: Region, compartment and Compute selection
+    variables: ['${region}', '${target_compartment_ocid}', '${selected_instance_ids}']
   - title: Function application and networking
     variables: ['${create_function_application}', '${application_id}', '${create_network}', '${existing_vcn_id}', '${existing_subnet_id}']
   - title: Daily schedule
@@ -19,19 +19,16 @@ variableGroups:
     variables: ['${workload_regions}', '${repository_families}', '${group_prefix}', '${logging_enabled}', '${invoke_after_deploy}', '${iam_wait_seconds}']
   - title: Console context
     visible: false
-    variables: ['${tenancy_ocid}', '${compartment_ocid}', '${region}', '${console_region}', '${selected_instance_id}', '${subnet_ids}', '${build_function_image}', '${source_repository_url}', '${source_branch}', '${build_revision}', '${existing_image}']
+    variables: ['${tenancy_ocid}', '${compartment_ocid}', '${selected_instance_id}', '${subnet_ids}', '${build_function_image}', '${source_repository_url}', '${source_branch}', '${build_revision}', '${existing_image}']
 variables:
   tenancy_ocid:
     type: string
     visible: false
-  console_region:
-    type: string
-    default: ${session.region}
-    visible: false
   region:
     type: oci:identity:region:name
-    default: ${session.region}
-    visible: false
+    title: Region
+    description: Select the subscribed region where the Function and supporting resources will be deployed. Use the same OCI Console region when selecting regional resources below.
+    required: true
   compartment_ocid:
     type: string
     visible: false

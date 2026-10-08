@@ -73,7 +73,7 @@ Fields named `auth` (default `APIKey`), `bootstrap_iam`, `compartment_id`, and `
 To load the updated form in the Create stack wizard:
 
 1. For the published package, cancel the uncreated wizard and open **Onboard in OSMH** again. To upload a local copy instead, select **Previous** to return to **Stack information**.
-2. Under configuration source, select **My configuration → .Zip file** and replace the old source with **`osmh-resource-manager-console-v1.3.zip`** from the project folder. This is a visible copy of the generated `.deployment/osmh-resource-manager.zip`.
+2. Under configuration source, select **My configuration → .Zip file** and replace the old source with **`osmh-resource-manager-console-v1.4.zip`** from the project folder. This is a visible copy of the generated `.deployment/osmh-resource-manager.zip`.
 3. If a working directory is requested, use the ZIP root (empty/default). The ZIP has `schema.yaml` and `orm_*.tf` directly at its root and excludes `deployment/`.
 4. Select **Next**. The first group should be **Compartment and Compute selection**, with **Deployment and onboarding compartment** and a dropdown-list control for **Compute instances to onboard**.
 5. If the wizard retains the previous source, cancel the uncreated stack and start a new Create stack wizard with this ZIP.
@@ -88,7 +88,7 @@ The form presents these controls in order:
 
 | Order | Control | Behavior |
 | --- | --- | --- |
-| 1 | Region | Current subscribed region selected from the OCI Console region menu |
+| 1 | Region | Required OCI region dropdown; Plan verifies that the selected region is a READY tenancy subscription |
 | 2 | Deployment and onboarding compartment | Independently selectable from the compartment that stores the Resource Manager stack |
 | 3 | Compute instances | Dynamic dropdown list populated from the selected compartment |
 | 4 | Function application | Create a new application, or enter an existing application's OCID |
@@ -98,7 +98,7 @@ The form presents these controls in order:
 
 Tagging and advanced settings follow these controls. The default time remains **16:30 UTC** (22:00 IST). Terraform callers can supply any valid `HH:MM` time through `schedule_time_utc`.
 
-**Native Console limits:** Oracle automatically fills the specially named `compartment_ocid` from Stack information, so it is retained as hidden stack context and the form uses a differently named target variable. Oracle's schema cannot filter its region field to a tenancy's subscriptions, so the form binds deployment to `${session.region}`; choose a subscribed region in the Console first. The Compute picker accepts only `compartmentId`. It has no recursive-subtree, lifecycle-state, OKE-membership, image/OS, or OSMH-registration filter. Consequently, one generic deploy-button package cannot combine descendant compartments or hide those rows in the native dropdown. Apply validates the selected Compute state and scope; the Function checks OKE and OS eligibility before writing any tags and skips instances already present in OSMH. The scheduled worker scans the full target subtree for tagged instances. Oracle's schema also has no Function application picker, so existing applications use an OCID field validated during Plan. See [Oracle's supported schema and instance-picker definition](https://docs.oracle.com/en-us/iaas/Content/ResourceManager/Concepts/terraformconfigresourcemanager_topic-schema.htm).
+**Native Console limits:** Oracle automatically fills the specially named `compartment_ocid` from Stack information, so it is retained as hidden stack context and the form uses a differently named target variable. The region is an explicit OCI region dropdown and Plan verifies that it is a READY tenancy subscription; switch the OCI Console to that region before selecting regional resources. The Compute picker accepts only `compartmentId`. It has no recursive-subtree, lifecycle-state, OKE-membership, image/OS, or OSMH-registration filter. Consequently, one generic deploy-button package cannot combine descendant compartments or hide those rows in the native dropdown. Apply validates the selected Compute state and scope; the Function checks OKE and OS eligibility before writing any tags and skips instances already present in OSMH. The scheduled worker scans the full target subtree for tagged instances. Oracle's schema also has no Function application picker, so existing applications use an OCID field validated during Plan. See [Oracle's supported schema and instance-picker definition](https://docs.oracle.com/en-us/iaas/Content/ResourceManager/Concepts/terraformconfigresourcemanager_topic-schema.htm).
 
 After changing compartment, reselect instances, application and networking. Dropdowns show resources the caller can view; they do not grant access. Plan validates selected instance state/scope, existing application state/shape/scope, and subnet scope/VCN. Guest OS and OKE checks run inside the initial Function invocation.
 
