@@ -3,12 +3,12 @@
 resource "oci_ons_notification_topic" "build" {
   count          = var.build_function_image ? 1 : 0
   depends_on     = [terraform_data.validate]
-  compartment_id = var.compartment_ocid
+  compartment_id = local.target_compartment_id
   name           = "${local.name}-build"
 }
 resource "oci_devops_project" "build" {
   count          = var.build_function_image ? 1 : 0
-  compartment_id = var.compartment_ocid
+  compartment_id = local.target_compartment_id
   name           = "${local.name}-build"
   notification_config { topic_id = oci_ons_notification_topic.build[0].id }
 }
@@ -20,7 +20,7 @@ resource "oci_logging_log" "build" {
   is_enabled         = true
   retention_duration = 30
   configuration {
-    compartment_id = var.compartment_ocid
+    compartment_id = local.target_compartment_id
     source {
       category    = "all"
       resource    = oci_devops_project.build[0].id
@@ -44,7 +44,7 @@ resource "oci_devops_build_pipeline" "image" {
 resource "oci_artifacts_container_repository" "worker" {
   count          = var.build_function_image ? 1 : 0
   depends_on     = [terraform_data.validate]
-  compartment_id = var.compartment_ocid
+  compartment_id = local.target_compartment_id
   display_name   = local.repository
   is_public      = false
   is_immutable   = true

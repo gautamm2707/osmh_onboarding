@@ -56,6 +56,8 @@ class ResourceManagerPackageTests(unittest.TestCase):
     def test_console_schema_uses_dynamic_compute_list_and_managed_auth(self):
         schema = (ROOT / "schema.yaml").read_text()
         self.assertIn("type: list\n    valueType: selected_instance_id", schema)
+        self.assertIn("target_compartment_ocid:\n    type: oci:identity:compartment:id", schema)
+        self.assertIn("compartment_ocid:\n    type: string\n    visible: false", schema)
         self.assertIn("type: oci:core:instance:id", schema)
         self.assertIn("type: oci:kms:secret:id", schema)
         self.assertIn("default: ${session.region}\n    visible: false", schema)

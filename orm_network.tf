@@ -2,7 +2,7 @@
 resource "oci_core_vcn" "function" {
   depends_on     = [terraform_data.validate]
   count          = local.create_new_network ? 1 : 0
-  compartment_id = var.compartment_ocid
+  compartment_id = local.target_compartment_id
   display_name   = "${local.name}-vcn"
   cidr_blocks    = ["10.254.0.0/24"]
   dns_label      = "osmhfn"
@@ -10,14 +10,14 @@ resource "oci_core_vcn" "function" {
 
 resource "oci_core_nat_gateway" "function" {
   count          = local.create_new_network ? 1 : 0
-  compartment_id = var.compartment_ocid
+  compartment_id = local.target_compartment_id
   vcn_id         = oci_core_vcn.function[0].id
   display_name   = "${local.name}-nat"
 }
 
 resource "oci_core_route_table" "function" {
   count          = local.create_new_network ? 1 : 0
-  compartment_id = var.compartment_ocid
+  compartment_id = local.target_compartment_id
   vcn_id         = oci_core_vcn.function[0].id
   display_name   = "${local.name}-routes"
   route_rules {
@@ -29,7 +29,7 @@ resource "oci_core_route_table" "function" {
 
 resource "oci_core_security_list" "function" {
   count          = local.create_new_network ? 1 : 0
-  compartment_id = var.compartment_ocid
+  compartment_id = local.target_compartment_id
   vcn_id         = oci_core_vcn.function[0].id
   display_name   = "${local.name}-egress"
   egress_security_rules {
@@ -60,7 +60,7 @@ resource "oci_core_security_list" "function" {
 
 resource "oci_core_subnet" "function" {
   count                      = local.create_new_network ? 1 : 0
-  compartment_id             = var.compartment_ocid
+  compartment_id             = local.target_compartment_id
   vcn_id                     = oci_core_vcn.function[0].id
   cidr_block                 = "10.254.0.0/24"
   display_name               = "${local.name}-subnet"
@@ -77,7 +77,7 @@ data "oci_core_subnet" "existing" {
   subnet_id = each.value
   lifecycle {
     postcondition {
-      condition     = self.compartment_id == var.compartment_ocid && self.state == "AVAILABLE" && (self.availability_domain == null || self.availability_domain == "") && (var.existing_vcn_id == "" || self.vcn_id == var.existing_vcn_id)
+      condition     = self.compartment_id == local.target_compartment_id && self.state == "AVAILABLE" && (self.availability_domain == null || self.availability_domain == "") && (var.existing_vcn_id == "" || self.vcn_id == var.existing_vcn_id)
       error_message = "Select an available regional subnet in the chosen compartment and VCN, with outbound HTTPS and DNS connectivity."
     }
   }

@@ -1,7 +1,7 @@
 resource "oci_functions_application" "worker" {
   depends_on     = [terraform_data.validate, data.oci_core_subnet.existing]
   count          = local.create_application ? 1 : 0
-  compartment_id = var.compartment_ocid
+  compartment_id = local.target_compartment_id
   display_name   = local.name
   subnet_ids     = local.create_new_network ? [oci_core_subnet.function[0].id] : local.existing_subnets
   shape          = "GENERIC_X86"
@@ -17,7 +17,7 @@ resource "oci_functions_function" "worker" {
   timeout_in_seconds               = 300
   detached_mode_timeout_in_seconds = 3600
   config = {
-    OSMH_COMPARTMENT_ID      = var.compartment_ocid
+    OSMH_COMPARTMENT_ID      = local.target_compartment_id
     OSMH_TAG_NAMESPACE       = local.namespace
     OSMH_REGIONS             = var.workload_regions == "" ? var.region : var.workload_regions
     OSMH_SELECTION_REGION    = var.region
@@ -58,7 +58,7 @@ resource "oci_identity_policy" "worker" {
 }
 
 resource "oci_resource_scheduler_schedule" "nightly" {
-  compartment_id     = var.compartment_ocid
+  compartment_id     = local.target_compartment_id
   display_name       = "${local.name}-daily"
   description        = "Daily tagged-instance OSMH reconciliation at ${var.schedule_time_utc} UTC"
   action             = "START_RESOURCE"
@@ -82,7 +82,7 @@ resource "oci_identity_policy" "scheduler" {
 
 resource "oci_logging_log_group" "worker" {
   depends_on     = [terraform_data.validate]
-  compartment_id = var.compartment_ocid
+  compartment_id = local.target_compartment_id
   display_name   = local.name
 }
 
@@ -94,7 +94,7 @@ resource "oci_logging_log" "worker" {
   is_enabled         = true
   retention_duration = 30
   configuration {
-    compartment_id = var.compartment_ocid
+    compartment_id = local.target_compartment_id
     source {
       category    = "invoke"
       resource    = local.application_id
@@ -132,7 +132,7 @@ data "oci_functions_application" "existing" {
   application_id = var.application_id
   lifecycle {
     postcondition {
-      condition     = self.compartment_id == var.compartment_ocid && self.shape == "GENERIC_X86" && self.state == "ACTIVE"
+      condition     = self.compartment_id == local.target_compartment_id && self.shape == "GENERIC_X86" && self.state == "ACTIVE"
       error_message = "The existing application must be ACTIVE, GENERIC_X86, and in the selected compartment and region."
     }
   }
@@ -144,7 +144,7 @@ data "oci_core_instance" "selected" {
   instance_id = each.value
   lifecycle {
     postcondition {
-      condition     = self.compartment_id == var.compartment_ocid && self.state == "RUNNING"
+      condition     = self.compartment_id == local.target_compartment_id && self.state == "RUNNING"
       error_message = "Select RUNNING instances from the selected compartment and region. The worker also checks OS support and excludes OKE nodes before tagging."
     }
   }

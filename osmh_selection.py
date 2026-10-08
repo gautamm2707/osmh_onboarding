@@ -29,13 +29,25 @@ def tag_selected(args, compute, container_engine, managed):
         previous = ((instance.defined_tags or {}).get(args.tag_namespace) or {}).get(TAG_KEY)
         if previous not in (None, TAG_VALUE):
             raise SystemExit(f"Conflicting opt-in tag on {instance.id}; no instances tagged.")
+    # OSMH inventory is a separate service and cannot filter the Resource
+    # Manager Compute picker. Skip registered Compute instances before any tag
+    # writes so selecting a stale row remains harmless.
+    inventory = list_managed_in_compartments(managed, [args.compartment_id])
+    existing_managed = {item.id: item for item in inventory if item.location == "OCI_COMPUTE"}
+    unregistered = []
+    for instance in instances:
+        if instance.id in existing_managed:
+            print(f"Already registered in OSMH; skip opt-in tag: {instance.display_name} ({instance.id})")
+        else:
+            unregistered.append(instance)
+    if not unregistered:
+        return
+
     # Complete eligibility checks before the first write. Reuse the worker's OS
     # and OKE checks instead of trusting labels or the Console's resource list.
-    oke = discover_oke_instance_ids(container_engine, [args.compartment_id], instances)
-    inventory = list_managed_in_compartments(managed, [args.compartment_id])
-    eligible = scan_candidates(compute, instances, oke,
-                               {item.id: item for item in inventory if item.location == "OCI_COMPUTE"})
-    if {item.id for item, _ in eligible} != set(ids):
+    oke = discover_oke_instance_ids(container_engine, [args.compartment_id], unregistered)
+    eligible = scan_candidates(compute, unregistered, oke, {})
+    if {item.id for item, _ in eligible} != {item.id for item in unregistered}:
         raise SystemExit("Selection contains OKE, unsupported or unverifiable instances; no instances tagged.")
     for instance, _ in eligible:
         # Re-reads state and tags and uses ETag to preserve concurrent changes.

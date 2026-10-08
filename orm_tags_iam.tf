@@ -3,7 +3,7 @@ resource "oci_identity_tag_namespace" "opt_in" {
   provider       = oci.home
   count          = var.use_existing_tag_namespace ? 0 : 1
   depends_on     = [terraform_data.validate]
-  compartment_id = var.compartment_ocid
+  compartment_id = local.target_compartment_id
   name           = var.tag_namespace
   description    = "Opt in selected Compute instances to OSMH reconciliation"
   lifecycle { prevent_destroy = true }

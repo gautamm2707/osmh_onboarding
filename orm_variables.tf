@@ -8,9 +8,18 @@ variable "tenancy_ocid" {
 }
 variable "compartment_ocid" {
   type        = string
-  description = "Deployment compartment and root of the workload compartment tree to scan."
+  description = "Automatically supplied by OCI Resource Manager: the compartment that stores the stack."
   validation {
     condition     = can(regex("^ocid1\\.(compartment|tenancy)\\.", var.compartment_ocid))
+    error_message = "Use a compartment or tenancy OCID."
+  }
+}
+variable "target_compartment_ocid" {
+  type        = string
+  default     = ""
+  description = "Compartment where resources are deployed and the root of the workload compartment tree to scan. Empty preserves compatibility by using compartment_ocid."
+  validation {
+    condition     = var.target_compartment_ocid == "" || can(regex("^ocid1\\.(compartment|tenancy)\\.", var.target_compartment_ocid))
     error_message = "Use a compartment or tenancy OCID."
   }
 }

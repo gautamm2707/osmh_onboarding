@@ -59,6 +59,16 @@ run "existing_image_deployment" {
     error_message = "Default deployment must provision instance access and private networking."
   }
 }
+run "target_compartment_is_independent_of_stack_compartment" {
+  command = plan
+  variables {
+    target_compartment_ocid = "ocid1.compartment.oc1..workloads"
+  }
+  assert {
+    condition     = oci_functions_application.worker[0].compartment_id == "ocid1.compartment.oc1..workloads" && oci_core_vcn.function[0].compartment_id == "ocid1.compartment.oc1..workloads"
+    error_message = "Deployment resources must use the target compartment rather than the stack storage compartment."
+  }
+}
 run "cloud_build_deployment" {
   command = plan
   variables {

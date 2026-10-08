@@ -84,6 +84,16 @@ class SelectedInstanceTests(unittest.TestCase):
         apply.assert_not_called()
         self.assertEqual(scan.call_args.args[2], {SECOND: "OKE node"})
 
+    def test_registered_instances_are_skipped_before_eligibility_checks(self):
+        args, compute, oke, inventory, scan, apply = self.fixture([instance(), instance(SECOND)])
+        inventory.return_value = [NS(id=FIRST, location="OCI_COMPUTE")]
+        scan.return_value = [(instance(SECOND), None)]
+        selection.tag_selected(args, compute, Mock(), Mock())
+        self.assertEqual([item.id for item in oke.call_args.args[2]], [SECOND])
+        self.assertEqual([item.id for item in scan.call_args.args[1]], [SECOND])
+        apply.assert_called_once()
+        self.assertEqual(apply.call_args.args[2].id, SECOND)
+
     def test_failed_tagging_does_not_start_reconciliation(self):
         process = Mock(stdout=iter(["tagging failed\n"]))
         process.wait.return_value = 1

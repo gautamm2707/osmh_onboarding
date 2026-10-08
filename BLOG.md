@@ -23,12 +23,12 @@ A platform team manages instances across development, testing, and production co
 
 The link opens **Create Stack** in your OCI Console session, or prompts you to sign in, with the published Resource Manager package selected. The package contains the new Console form at its root.
 
-1. Choose a subscribed region in the OCI Console, then select the **Compartment** and **Compute instances** to onboard.
+1. Choose a subscribed region in the OCI Console, then select the **Deployment and onboarding compartment** independently from the compartment that stores the stack. Select one or more Compute instances from that target compartment.
 2. Create a Function application, or enter an existing application’s OCID. For a new application, create networking or select an existing **VCN** and **regional subnet**.
 3. Choose the daily **UTC start time**, select the GitHub token secret, and enter the published source commit SHA.
 4. Create the stack, review **Plan**, and run **Apply**. A detached job applies `OSMH.managedby=osmanagementhub` to the selected instances and starts onboarding.
 
-The Compute control is a compartment-dependent dropdown list. OCI’s native picker lists one compartment at a time; scheduled reconciliation still scans the selected compartment and its descendants for tagged instances. Resource Manager also has no native Function application picker, so existing applications use an OCID field. See [Oracle’s schema documentation](https://docs.oracle.com/en-us/iaas/Content/ResourceManager/Concepts/terraformconfigresourcemanager_topic-schema.htm).
+The Compute control is a compartment-dependent dropdown list. OCI’s native picker lists one compartment at a time and offers no state, OKE, or OSMH-registration filters. Apply rechecks every selection: stopped or OKE instances are rejected, while instances already registered in OSMH are skipped. Scheduled reconciliation scans the target compartment and its descendants for tagged instances. Resource Manager also has no native Function application picker, so existing applications use an OCID field. See [Oracle’s schema documentation](https://docs.oracle.com/en-us/iaas/Content/ResourceManager/Concepts/terraformconfigresourcemanager_topic-schema.htm).
 
 An OCIR `AUTH_TOKEN` is not requested. OCI DevOps delivers the image with a resource principal, and OCI Functions pulls and invokes it through IAM. This avoids placing a long-lived registry credential in Resource Manager variables or state.
 

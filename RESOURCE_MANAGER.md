@@ -68,12 +68,12 @@ Do not enter an OCIR `AUTH_TOKEN`. Auth tokens are used by local Docker/Fn clien
 
 ## If Configure variables still shows the old form
 
-Fields named `auth` (default `APIKey`), `bootstrap_iam`, `compartment_id`, and `home_region` identify the separate CLI configuration in `deployment/variables.tf`. The Resource Manager configuration uses `compartment_ocid`, supplies credentials automatically, and starts with the **Compartment and Compute selection** group.
+Fields named `auth` (default `APIKey`), `bootstrap_iam`, `compartment_id`, and `home_region` identify the separate CLI configuration in `deployment/variables.tf`. In the Resource Manager configuration, hidden `compartment_ocid` is the compartment chosen on Stack information, while `target_compartment_ocid` is the independently selectable deployment and onboarding scope. The form starts with the **Compartment and Compute selection** group.
 
 To load the updated form in the Create stack wizard:
 
 1. For the published package, cancel the uncreated wizard and open **Onboard in OSMH** again. To upload a local copy instead, select **Previous** to return to **Stack information**.
-2. Under configuration source, select **My configuration → .Zip file** and replace the old source with **`osmh-resource-manager-console-v1.2.zip`** from the project folder. This is a visible copy of the generated `.deployment/osmh-resource-manager.zip`.
+2. Under configuration source, select **My configuration → .Zip file** and replace the old source with **`osmh-resource-manager-console-v1.3.zip`** from the project folder. This is a visible copy of the generated `.deployment/osmh-resource-manager.zip`.
 3. If a working directory is requested, use the ZIP root (empty/default). The ZIP has `schema.yaml` and `orm_*.tf` directly at its root and excludes `deployment/`.
 4. Select **Next**. The first group should be **Compartment and Compute selection**, with **Deployment and onboarding compartment** and a dropdown-list control for **Compute instances to onboard**.
 5. If the wizard retains the previous source, cancel the uncreated stack and start a new Create stack wizard with this ZIP.
@@ -89,7 +89,7 @@ The form presents these controls in order:
 | Order | Control | Behavior |
 | --- | --- | --- |
 | 1 | Region | Current subscribed region selected from the OCI Console region menu |
-| 2 | Compartment | Compartments visible to the signed-in identity |
+| 2 | Deployment and onboarding compartment | Independently selectable from the compartment that stores the Resource Manager stack |
 | 3 | Compute instances | Dynamic dropdown list populated from the selected compartment |
 | 4 | Function application | Create a new application, or enter an existing application's OCID |
 | 5 | Networking for a new application | Create VCN/subnet/NAT/routes/security rules, or choose a VCN and then its regional subnet |
@@ -98,13 +98,13 @@ The form presents these controls in order:
 
 Tagging and advanced settings follow these controls. The default time remains **16:30 UTC** (22:00 IST). Terraform callers can supply any valid `HH:MM` time through `schedule_time_utc`.
 
-**Native Console limits:** Oracle's schema cannot filter its region field to a tenancy's subscriptions, so the form binds the deployment to `${session.region}` and hides the redundant field. Choose a subscribed region in the OCI Console before opening the form. The Compute resource picker accepts one compartment and does not recursively aggregate descendants into one dropdown. Select instances in the chosen compartment; the scheduled worker still scans its descendant tree for instances opted in later. Oracle's schema also has no Function application picker, so existing applications use an OCID field validated during Plan. See [Oracle's supported schema](https://docs.oracle.com/en-us/iaas/Content/ResourceManager/Concepts/terraformconfigresourcemanager_topic-schema.htm).
+**Native Console limits:** Oracle automatically fills the specially named `compartment_ocid` from Stack information, so it is retained as hidden stack context and the form uses a differently named target variable. Oracle's schema cannot filter its region field to a tenancy's subscriptions, so the form binds deployment to `${session.region}`; choose a subscribed region in the Console first. The Compute picker accepts only `compartmentId`. It has no recursive-subtree, lifecycle-state, OKE-membership, image/OS, or OSMH-registration filter. Consequently, one generic deploy-button package cannot combine descendant compartments or hide those rows in the native dropdown. Apply validates the selected Compute state and scope; the Function checks OKE and OS eligibility before writing any tags and skips instances already present in OSMH. The scheduled worker scans the full target subtree for tagged instances. Oracle's schema also has no Function application picker, so existing applications use an OCID field validated during Plan. See [Oracle's supported schema and instance-picker definition](https://docs.oracle.com/en-us/iaas/Content/ResourceManager/Concepts/terraformconfigresourcemanager_topic-schema.htm).
 
 After changing compartment, reselect instances, application and networking. Dropdowns show resources the caller can view; they do not grant access. Plan validates selected instance state/scope, existing application state/shape/scope, and subnet scope/VCN. Guest OS and OKE checks run inside the initial Function invocation.
 
 ## Scope and existing resources
 
-- `compartment_ocid` is both the deployment compartment and the root of recursive instance discovery. Resources and IAM policies are named using a hash of this scope plus the deployment region. IAM resources are created through a separate provider in the tenancy home region. Use one stack per non-overlapping scope; a second stack with the same scope can conflict by name.
+- `compartment_ocid` is supplied automatically from Stack information and identifies where the Resource Manager stack is stored. `target_compartment_ocid` is the independent deployment compartment and root of recursive instance discovery. Resources and IAM policies are named using a hash of the target scope plus the deployment region. IAM resources are created through a separate provider in the tenancy home region. The Resource Manager job identity must have permission in the target compartment. Use one stack per non-overlapping target scope; a second stack with the same scope can conflict by name.
 - `workload_regions` is empty for the deployment region, CSV for selected regions, or `all` for all READY subscriptions. This package targets the commercial OCI realm (`oc1`).
 - New networks use `10.254.0.0/24`, no ingress rules, HTTPS egress, and DNS to the OCI resolver. For established networking, clear **Create a new VCN and subnet**, then select the existing VCN and regional subnet in that compartment. Existing routes/security rules must provide outbound HTTPS and DNS. The hidden `subnet_ids` input is retained for earlier non-Console callers.
 - Reused applications must be `ACTIVE`, `GENERIC_X86`, and in the selected region and compartment. Clear **Create a new Function application** and supply `application_id`. Network controls are hidden and ignored in this mode. If the application already has its invocation log, set `logging_enabled=false`.

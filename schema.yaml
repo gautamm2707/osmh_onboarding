@@ -1,12 +1,12 @@
 title: Onboard in OSMH
 description: Deploy scheduled tag-based OS Management Hub onboarding in your OCI tenancy.
 schemaVersion: 1.1.0
-version: "1.2"
+version: "1.3"
 locale: en
-informationalText: The stack deploys in the current OCI Console region. Use the Console region menu to select one of the tenancy's subscribed regions before opening this form. Apply opts in the selected instances and starts onboarding. Daily runs reconcile tagged instances.
+informationalText: The stack deploys in the current OCI Console region and in the target compartment selected below, which can differ from the compartment that stores the stack. Apply validates and opts in selected instances. Daily runs reconcile tagged instances across the target compartment tree.
 variableGroups:
   - title: Compartment and Compute selection
-    variables: ['${compartment_ocid}', '${selected_instance_ids}']
+    variables: ['${target_compartment_ocid}', '${selected_instance_ids}']
   - title: Function application and networking
     variables: ['${create_function_application}', '${application_id}', '${create_network}', '${existing_vcn_id}', '${existing_subnet_id}']
   - title: Daily schedule
@@ -19,7 +19,7 @@ variableGroups:
     variables: ['${workload_regions}', '${repository_families}', '${group_prefix}', '${logging_enabled}', '${invoke_after_deploy}', '${iam_wait_seconds}']
   - title: Console context
     visible: false
-    variables: ['${tenancy_ocid}', '${region}', '${console_region}', '${selected_instance_id}', '${subnet_ids}', '${build_function_image}', '${source_repository_url}', '${source_branch}', '${build_revision}', '${existing_image}']
+    variables: ['${tenancy_ocid}', '${compartment_ocid}', '${region}', '${console_region}', '${selected_instance_id}', '${subnet_ids}', '${build_function_image}', '${source_repository_url}', '${source_branch}', '${build_revision}', '${existing_image}']
 variables:
   tenancy_ocid:
     type: string
@@ -33,22 +33,25 @@ variables:
     default: ${session.region}
     visible: false
   compartment_ocid:
+    type: string
+    visible: false
+  target_compartment_ocid:
     type: oci:identity:compartment:id
     title: Deployment and onboarding compartment
     required: true
-    description: Deploy resources here and scan this compartment and its descendants. Select a dedicated scope that no other deployment manages.
+    description: Select independently from the compartment that stores this Resource Manager stack. Resources are deployed here and scheduled reconciliation scans this compartment and its descendants.
   selected_instance_ids:
     type: list
     valueType: selected_instance_id
     title: Compute instances to onboard
-    description: Select one or more RUNNING supported non-OKE instances from the chosen compartment. The scheduled worker scans this compartment and its descendants for instances opted in later. Removing a selection does not remove its opt-in tag.
+    description: The native OCI picker lists instances from this exact compartment and cannot filter by state, OKE membership, OS support, or OSMH registration. Select intended instances; Apply rejects stopped/OKE/unsupported choices and skips instances already registered in OSMH. Daily reconciliation scans the target compartment tree for tagged instances.
     required: true
   selected_instance_id:
     type: oci:core:instance:id
     title: Compute instance
     visible: false
     dependsOn:
-      compartmentId: ${compartment_ocid}
+      compartmentId: ${target_compartment_ocid}
   workload_regions:
     type: string
     title: Workload regions
@@ -76,7 +79,7 @@ variables:
     description: "Select an OCI Vault secret containing a GitHub PAT that can read the source repository. OCI DevOps receives only the secret OCID. An OCIR AUTH_TOKEN is not used: DevOps delivers the image and OCI Functions pulls it using IAM."
     required: true
     dependsOn:
-      compartmentId: ${compartment_ocid}
+      compartmentId: ${target_compartment_ocid}
   build_revision:
     type: string
     default: "1"
@@ -108,7 +111,7 @@ variables:
     title: Existing VCN
     required: true
     dependsOn:
-      compartmentId: ${compartment_ocid}
+      compartmentId: ${target_compartment_ocid}
     visible:
       and:
         - ${create_function_application}
@@ -119,7 +122,7 @@ variables:
     description: Must have outbound HTTPS and DNS connectivity for the Function.
     required: true
     dependsOn:
-      compartmentId: ${compartment_ocid}
+      compartmentId: ${target_compartment_ocid}
       vcnId: ${existing_vcn_id}
       hideAdSubnet: true
     visible:
