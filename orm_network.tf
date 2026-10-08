@@ -4,8 +4,9 @@ resource "oci_core_vcn" "function" {
   count          = local.create_new_network ? 1 : 0
   compartment_id = local.target_compartment_id
   display_name   = "${local.name}-vcn"
-  cidr_blocks    = ["10.254.0.0/24"]
-  dns_label      = "osmhfn"
+  lifecycle { ignore_changes = [display_name] }
+  cidr_blocks = ["10.254.0.0/24"]
+  dns_label   = "osmhfn"
 }
 
 resource "oci_core_nat_gateway" "function" {
@@ -13,6 +14,7 @@ resource "oci_core_nat_gateway" "function" {
   compartment_id = local.target_compartment_id
   vcn_id         = oci_core_vcn.function[0].id
   display_name   = "${local.name}-nat"
+  lifecycle { ignore_changes = [display_name] }
 }
 
 resource "oci_core_route_table" "function" {
@@ -20,6 +22,7 @@ resource "oci_core_route_table" "function" {
   compartment_id = local.target_compartment_id
   vcn_id         = oci_core_vcn.function[0].id
   display_name   = "${local.name}-routes"
+  lifecycle { ignore_changes = [display_name] }
   route_rules {
     destination       = "0.0.0.0/0"
     destination_type  = "CIDR_BLOCK"
@@ -32,6 +35,7 @@ resource "oci_core_security_list" "function" {
   compartment_id = local.target_compartment_id
   vcn_id         = oci_core_vcn.function[0].id
   display_name   = "${local.name}-egress"
+  lifecycle { ignore_changes = [display_name] }
   egress_security_rules {
     protocol    = "6"
     destination = "0.0.0.0/0"
@@ -59,11 +63,12 @@ resource "oci_core_security_list" "function" {
 }
 
 resource "oci_core_subnet" "function" {
-  count                      = local.create_new_network ? 1 : 0
-  compartment_id             = local.target_compartment_id
-  vcn_id                     = oci_core_vcn.function[0].id
-  cidr_block                 = "10.254.0.0/24"
-  display_name               = "${local.name}-subnet"
+  count          = local.create_new_network ? 1 : 0
+  compartment_id = local.target_compartment_id
+  vcn_id         = oci_core_vcn.function[0].id
+  cidr_block     = "10.254.0.0/24"
+  display_name   = "${local.name}-subnet"
+  lifecycle { ignore_changes = [display_name] }
   dns_label                  = "function"
   prohibit_public_ip_on_vnic = true
   route_table_id             = oci_core_route_table.function[0].id

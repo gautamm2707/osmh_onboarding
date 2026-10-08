@@ -5,11 +5,13 @@ resource "oci_ons_notification_topic" "build" {
   depends_on     = [terraform_data.validate]
   compartment_id = local.target_compartment_id
   name           = "${local.name}-build"
+  lifecycle { ignore_changes = [name] }
 }
 resource "oci_devops_project" "build" {
   count          = var.build_function_image ? 1 : 0
   compartment_id = local.target_compartment_id
   name           = "${local.name}-build"
+  lifecycle { ignore_changes = [name] }
   notification_config { topic_id = oci_ons_notification_topic.build[0].id }
 }
 resource "oci_logging_log" "build" {
@@ -45,23 +47,26 @@ resource "oci_artifacts_container_repository" "worker" {
   count          = var.build_function_image ? 1 : 0
   depends_on     = [terraform_data.validate]
   compartment_id = local.target_compartment_id
-  display_name   = local.repository
-  is_public      = false
+  display_name   = "${local.name}/worker"
+  lifecycle { ignore_changes = [display_name] }
+  is_public = false
 }
 resource "oci_identity_dynamic_group" "build" {
   provider       = oci.home
   count          = var.build_function_image ? 1 : 0
   compartment_id = var.tenancy_ocid
   name           = "${local.name}-build"
-  description    = "Only this OSMH build pipeline and GitHub connection"
-  matching_rule  = "ANY {ALL {resource.type = 'devopsbuildpipeline', resource.id = '${oci_devops_build_pipeline.image[0].id}'}, ALL {resource.type = 'devopsconnection', resource.id = '${oci_devops_connection.github[0].id}'}}"
+  lifecycle { ignore_changes = [name] }
+  description   = "Only this OSMH build pipeline and GitHub connection"
+  matching_rule = "ANY {ALL {resource.type = 'devopsbuildpipeline', resource.id = '${oci_devops_build_pipeline.image[0].id}'}, ALL {resource.type = 'devopsconnection', resource.id = '${oci_devops_connection.github[0].id}'}}"
 }
 resource "oci_identity_policy" "build" {
   provider       = oci.home
   count          = var.build_function_image ? 1 : 0
   compartment_id = var.tenancy_ocid
   name           = "${local.name}-build"
-  description    = "Read one GitHub secret and deliver the OSMH image to one private repository"
+  lifecycle { ignore_changes = [name] }
+  description = "Read one GitHub secret and deliver the OSMH image to one private repository"
   statements = [
     # OCI DevOps evaluates source retrieval as both the build-pipeline and
     # external-connection principals. These documented compartment-scoped

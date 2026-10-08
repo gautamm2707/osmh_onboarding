@@ -3,15 +3,17 @@ resource "oci_functions_application" "worker" {
   count          = local.create_application ? 1 : 0
   compartment_id = local.target_compartment_id
   display_name   = local.name
-  subnet_ids     = local.create_new_network ? [oci_core_subnet.function[0].id] : local.existing_subnets
-  shape          = "GENERIC_X86"
+  lifecycle { ignore_changes = [display_name] }
+  subnet_ids = local.create_new_network ? [oci_core_subnet.function[0].id] : local.existing_subnets
+  shape      = "GENERIC_X86"
 
 }
 
 resource "oci_functions_function" "worker" {
-  depends_on                       = [terraform_data.validate, data.oci_functions_application.existing, oci_identity_policy.image_access, oci_devops_build_run.image, data.oci_core_instance.selected]
-  application_id                   = local.application_id
-  display_name                     = "onboard-tagged-instances"
+  depends_on     = [terraform_data.validate, data.oci_functions_application.existing, oci_identity_policy.image_access, oci_devops_build_run.image, data.oci_core_instance.selected]
+  application_id = local.application_id
+  display_name   = "onboard-tagged-instances-${local.suffix}"
+  lifecycle { ignore_changes = [display_name] }
   image                            = local.image
   memory_in_mbs                    = 1024
   timeout_in_seconds               = 300
@@ -33,7 +35,8 @@ resource "oci_identity_policy" "image_access" {
   depends_on     = [terraform_data.validate]
   compartment_id = var.tenancy_ocid
   name           = "${local.name}-image"
-  description    = "Functions service access to this deployment's image repository"
+  lifecycle { ignore_changes = [name] }
+  description = "Functions service access to this deployment's image repository"
   statements = [
     "Allow service FaaS to read repos in tenancy where target.repo.name = '${local.repository}'"
   ]
@@ -43,7 +46,8 @@ resource "oci_identity_policy" "worker" {
   provider       = oci.home
   compartment_id = var.tenancy_ocid
   name           = "${local.name}-function"
-  description    = "Operational access for the exact OSMH function; IAM is owned by the stack"
+  lifecycle { ignore_changes = [name] }
+  description = "Operational access for the exact OSMH function; IAM is owned by the stack"
   statements = [
     "Allow any-user to inspect tenancies in tenancy where all {${local.worker_condition}}",
     "Allow any-user to read compartments in tenancy where all {${local.worker_condition}}",
@@ -58,8 +62,9 @@ resource "oci_identity_policy" "worker" {
 }
 
 resource "oci_resource_scheduler_schedule" "nightly" {
-  compartment_id     = local.target_compartment_id
-  display_name       = "${local.name}-daily"
+  compartment_id = local.target_compartment_id
+  display_name   = "${local.name}-daily"
+  lifecycle { ignore_changes = [display_name] }
   description        = "Daily tagged-instance OSMH reconciliation at ${var.schedule_time_utc} UTC"
   action             = "START_RESOURCE"
   recurrence_type    = "CRON"
@@ -74,7 +79,8 @@ resource "oci_identity_policy" "scheduler" {
   provider       = oci.home
   compartment_id = var.tenancy_ocid
   name           = "${local.name}-schedule"
-  description    = "Permit only this schedule to invoke the OSMH function"
+  lifecycle { ignore_changes = [name] }
+  description = "Permit only this schedule to invoke the OSMH function"
   statements = [
     "Allow any-user to use functions-family ${local.scope} where all {request.principal.type = 'resourceschedule', request.principal.id = '${oci_resource_scheduler_schedule.nightly.id}', target.function.id = '${oci_functions_function.worker.id}'}"
   ]
@@ -84,6 +90,7 @@ resource "oci_logging_log_group" "worker" {
   depends_on     = [terraform_data.validate]
   compartment_id = local.target_compartment_id
   display_name   = local.name
+  lifecycle { ignore_changes = [display_name] }
 }
 
 resource "oci_logging_log" "worker" {

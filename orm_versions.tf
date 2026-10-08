@@ -6,6 +6,10 @@ terraform {
       source  = "oracle/oci"
       version = ">= 8.29.0, < 9.0.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.7.2"
+    }
   }
 }
 
@@ -27,15 +31,25 @@ data "oci_objectstorage_namespace" "tenancy" {
   compartment_id = var.tenancy_ocid
 }
 
+# Generate once per state, including before the first OCI create. No keepers:
+# changing inputs or retrying a failed Apply must not rotate the deployment ID.
+resource "random_id" "deployment" {
+  byte_length = 16
+}
+
+# Generated names are assigned at creation only (see ignore_changes on names).
+# This also preserves names already owned by v1.7 and earlier stack states.
+# References to repositories and namespaces must use their actual stored names.
 locals {
   target_compartment_id = var.target_compartment_ocid != "" ? var.target_compartment_ocid : var.compartment_ocid
   home_region           = one([for r in data.oci_identity_region_subscriptions.tenancy.region_subscriptions : r.region_name if r.is_home_region])
   region_key            = try(lower(one([for r in data.oci_identity_region_subscriptions.tenancy.region_subscriptions : r.region_key if r.region_name == var.region && r.state == "READY"])), "invalid")
-  suffix                = substr(sha256(local.target_compartment_id), 0, 12)
+  suffix                = random_id.deployment.hex
   name                  = "osmh-rm-${local.suffix}-${var.region}"
   scope                 = local.target_compartment_id == var.tenancy_ocid ? "in tenancy" : "in compartment id ${local.target_compartment_id}"
-  namespace             = var.tag_namespace
-  repository            = var.build_function_image ? "${local.name}/worker" : try(regex("^[^/]+/[^/]+/(.+):[^:]+$", var.existing_image)[0], "invalid")
+  namespace             = var.use_existing_tag_namespace ? var.tag_namespace : oci_identity_tag_namespace.opt_in[0].name
+  new_namespace         = "${substr(var.tag_namespace, 0, 67)}_${local.suffix}"
+  repository            = var.build_function_image ? oci_artifacts_container_repository.worker[0].display_name : try(regex("^[^/]+/[^/]+/(.+):[^:]+$", var.existing_image)[0], "invalid")
   image_tag             = "${substr(var.source_commit, 0, 12)}-${var.build_revision}"
   built_image           = "${local.region_key}.ocir.io/${data.oci_objectstorage_namespace.tenancy.namespace}/${local.repository}:${local.image_tag}"
   image                 = var.build_function_image ? local.built_image : var.existing_image

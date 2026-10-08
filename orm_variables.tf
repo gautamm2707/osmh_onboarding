@@ -98,8 +98,9 @@ variable "application_id" {
   }
 }
 variable "tag_namespace" {
-  type    = string
-  default = "OSMH"
+  type        = string
+  default     = "OSMH"
+  description = "New namespace prefix (first 67 characters plus a per-stack suffix), or the exact name when reusing a namespace. Existing managed namespace names are preserved on upgrades."
   validation {
     condition     = can(regex("^[A-Za-z][A-Za-z0-9_]{0,99}$", var.tag_namespace))
     error_message = "Use a namespace starting with a letter, followed by letters, digits or underscores (max 100)."

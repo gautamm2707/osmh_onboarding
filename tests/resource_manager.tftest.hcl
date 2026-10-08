@@ -1,4 +1,10 @@
-# Run with Terraform >= 1.7. All OCI responses are mocked; no credentials or cloud writes.
+# Run with Terraform >= 1.14. All OCI responses are mocked; no credentials or cloud writes.
+override_resource {
+  target          = random_id.deployment
+  values          = { hex = "0123456789abcdef0123456789abcdef" }
+  override_during = plan
+}
+
 mock_provider "oci" {
   mock_data "oci_identity_region_subscriptions" {
     defaults = {

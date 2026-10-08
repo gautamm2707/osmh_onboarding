@@ -4,9 +4,12 @@ resource "oci_identity_tag_namespace" "opt_in" {
   count          = var.use_existing_tag_namespace ? 0 : 1
   depends_on     = [terraform_data.validate]
   compartment_id = local.target_compartment_id
-  name           = var.tag_namespace
+  name           = local.new_namespace
   description    = "Opt in selected Compute instances to OSMH reconciliation"
-  lifecycle { prevent_destroy = true }
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes  = [name]
+  }
 }
 resource "oci_identity_tag" "opt_in" {
   provider         = oci.home
@@ -52,15 +55,17 @@ resource "oci_identity_dynamic_group" "instances" {
   depends_on     = [terraform_data.validate, oci_identity_tag.opt_in, data.oci_identity_tag.existing]
   compartment_id = var.tenancy_ocid
   name           = "${local.name}-instances"
-  description    = "Compute instances explicitly opted into OSMH; permissions are scoped by policy"
-  matching_rule  = "ALL {resource.type = 'instance', tag.${var.tag_namespace}.managedby.value = 'osmanagementhub'}"
+  lifecycle { ignore_changes = [name] }
+  description   = "Compute instances explicitly opted into OSMH; permissions are scoped by policy"
+  matching_rule = "ALL {resource.type = 'instance', tag.${local.namespace}.managedby.value = 'osmanagementhub'}"
 }
 resource "oci_identity_policy" "instances" {
   provider       = oci.home
   count          = var.create_instance_iam ? 1 : 0
   compartment_id = var.tenancy_ocid
   name           = "${local.name}-instances"
-  description    = "OSMH agent permissions for opted-in instances in the selected compartment tree"
+  lifecycle { ignore_changes = [name] }
+  description = "OSMH agent permissions for opted-in instances in the selected compartment tree"
   statements = [
     "Allow dynamic-group id ${oci_identity_dynamic_group.instances[0].id} to {OSMH_MANAGED_INSTANCE_ACCESS} ${local.scope} where request.principal.id = target.managed-instance.id",
     "Allow dynamic-group id ${oci_identity_dynamic_group.instances[0].id} to use metrics ${local.scope} where target.metrics.namespace = 'oracle_appmgmt'",
