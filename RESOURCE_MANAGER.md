@@ -59,7 +59,7 @@ The button's ZIP must be reachable without authentication. A private GitHub repo
 
 1. Publish a commit containing the Function sources, `function/Dockerfile`, and root `build_spec.yaml`.
 2. Create a GitHub PAT supported by OCI DevOps with repository read access, including any required organization authorization. Store it as a secret in OCI Vault in the deployment compartment and region. The form provides a Vault-secret dropdown; the raw token is never entered into Resource Manager.
-3. Enter the full published commit SHA in the stack. The repository and branch are fixed by the published form. The stack creates a GitHub connection and grants only its connection/build-pipeline dynamic group access to that secret.
+3. The published form supplies a hidden, reviewed commit SHA. The repository and branch are also fixed by the form. The stack creates a GitHub connection and grants only its connection/build-pipeline dynamic group access to that secret.
 4. Apply builds on the managed Oracle Linux 8 x86 runner with Podman. A Deliver Artifacts stage pushes the image without an OCIR user auth token. Terraform waits for `SUCCEEDED` before creating/updating the Function.
 
 The Console form intentionally does not expose Function-image choices. It builds the image and delivers it to a private OCIR repository. Terraform callers can still use the hidden compatibility variables to supply an existing image, but that is not part of the guided Console workflow.
@@ -73,7 +73,7 @@ Fields named `auth` (default `APIKey`), `bootstrap_iam`, `compartment_id`, and `
 To load the updated form in the Create stack wizard:
 
 1. For the published package, cancel the uncreated wizard and open **Onboard in OSMH** again. To upload a local copy instead, select **Previous** to return to **Stack information**.
-2. Under configuration source, select **My configuration → .Zip file** and replace the old source with **`osmh-resource-manager-console-v1.4.zip`** from the project folder. This is a visible copy of the generated `.deployment/osmh-resource-manager.zip`.
+2. Under configuration source, select **My configuration → .Zip file** and replace the old source with **`osmh-resource-manager-console-v1.5.zip`** from the project folder. This is a visible copy of the generated `.deployment/osmh-resource-manager.zip`.
 3. If a working directory is requested, use the ZIP root (empty/default). The ZIP has `schema.yaml` and `orm_*.tf` directly at its root and excludes `deployment/`.
 4. Select **Next**. The first group should be **Compartment and Compute selection**, with **Deployment and onboarding compartment** and a dropdown-list control for **Compute instances to onboard**.
 5. If the wizard retains the previous source, cancel the uncreated stack and start a new Create stack wizard with this ZIP.
@@ -94,7 +94,7 @@ The form presents these controls in order:
 | 4 | Function application | Create a new application, or enter an existing application's OCID |
 | 5 | Networking for a new application | Create VCN/subnet/NAT/routes/security rules, or choose a VCN and then its regional subnet |
 | 6 | Daily schedule | Enable/disable and choose a UTC time in 15-minute intervals |
-| 7 | Function build authentication | Published commit SHA and a Vault dropdown for the GitHub token secret |
+| 7 | Function build authentication | Vault dropdown for the GitHub token secret; the reviewed source SHA is populated and hidden |
 
 Tagging and advanced settings follow these controls. The default time remains **16:30 UTC** (22:00 IST). Terraform callers can supply any valid `HH:MM` time through `schedule_time_utc`.
 
@@ -135,7 +135,7 @@ Apply success confirms that the detached invocation was accepted, not that taggi
 
 The configured IAM wait is a starting delay, not a guarantee of propagation. Dynamic-group membership can take longer. If the build fails with access errors, inspect its DevOps log and retry Apply after propagation; do not create a second stack. Increment `build_revision` to request a new run if needed. If the image was already delivered before a later failure, keep the existing successful build state while retrying Function deployment. Increment the revision before rebuilding, because the OCIR repository prevents overwriting existing tags.
 
-Changing `source_commit` or `build_revision` replaces the build run and selects a new image tag. Reapplying identical inputs does not request a new build. Function updates request a new initial invocation when enabled. If the initial invoke is rejected, infrastructure can still exist; retry Apply after correcting the reported issue. Disabling `invoke_after_deploy` suppresses the initial job only when the Compute selection is empty. Pending registration is not a failed Terraform deployment.
+Published forms pin `source_commit`; Terraform callers can override it. Changing `source_commit` or `build_revision` replaces the build run and selects a new image tag. Reapplying identical inputs does not request a new build. Function updates request a new initial invocation when enabled. If the initial invoke is rejected, infrastructure can still exist; retry Apply after correcting the reported issue. Disabling `invoke_after_deploy` suppresses the initial job only when the Compute selection is empty. Pending registration is not a failed Terraform deployment.
 
 Do not switch an established stack between creating and reusing its application/network/tag namespace, or between cloud builds and an existing image, without reviewing the plan. Such changes can destroy resources currently owned by the stack. Preserve the stack state and use the same stack for updates.
 

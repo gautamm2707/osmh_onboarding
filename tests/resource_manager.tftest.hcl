@@ -110,6 +110,7 @@ run "reject_unpinned_cloud_source" {
   command = plan
   variables {
     build_function_image   = true
+    source_commit          = ""
     github_token_secret_id = "ocid1.vaultsecret.oc1.iad.test"
   }
   expect_failures = [terraform_data.validate]
