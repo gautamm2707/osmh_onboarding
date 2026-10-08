@@ -68,7 +68,7 @@ variables:
   source_commit:
     type: string
     title: Published source commit SHA
-    description: Full 40-character commit from this repository. Pinning the build ensures the deployed Function matches the reviewed stack source. Use the commit shown on the published blog page.
+    description: Full 40-character commit from this repository. Pinning the build ensures the deployed Function matches the reviewed stack source. Copy the latest full SHA from the repository's main-branch commit history.
     required: true
   github_token_secret_id:
     type: oci:kms:secret:id

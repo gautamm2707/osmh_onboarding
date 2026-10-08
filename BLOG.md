@@ -12,7 +12,7 @@ A platform team manages instances across development, testing, and production co
 
 - **OCI access:** Permission to manage Resource Manager stacks and jobs, Functions, schedules, networking, logging, tags, dynamic groups, and tenancy IAM policies. Cloud builds also require DevOps, Container Registry, and Notifications permissions.
 - **Deployment region:** A commercial OCI tenancy with an active region subscription, required services, and available quotas. Choose the subscribed region from the OCI Console region menu before opening the deployment link.
-- **Function build:** A published 40-character Git commit SHA and an OCI Vault secret containing a GitHub access token that can read the source repository. The stack builds and delivers the Function image automatically.
+- **Function build:** The latest published 40-character SHA from the [main-branch commit history](https://github.com/gautamm2707/osmh_onboarding/commits/main) and an OCI Vault secret containing a GitHub access token that can read the source repository. The stack builds and delivers the Function image automatically.
 - **Networking:** Suitable regional subnets with outbound HTTPS and DNS access, or permission to create the supplied private network and NAT gateway.
 - **Eligible instances:** Running instances with a supported OS/image, a working Oracle Cloud Agent with the OSMH plugin available, and guest connectivity to OSMH.
 - **Existing tags:** If the `OSMH` namespace already exists, have its OCID ready and ensure its active `managedby` key permits `osmanagementhub`.
