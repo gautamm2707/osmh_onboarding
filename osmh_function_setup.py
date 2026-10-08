@@ -59,7 +59,7 @@ def automatic_image(host, namespace, compartment_id):
     root = Path(__file__).resolve().parent
     digest = hashlib.sha256()
     for name in ("onboard_osmh.py", "osmh_discovery.py", "osmh_iam.py", "osmh_runtime.py",
-                 "osmh_tags.py", "osmh_deployment.py", "osmh_function_setup.py", "reconcile_osmh.py",
+                 "osmh_tags.py", "osmh_deployment.py", "osmh_function_setup.py", "reconcile_osmh.py", "osmh_selection.py",
                  "function/func.py", "function/Dockerfile", "function/requirements.txt"):
         digest.update(name.encode())
         digest.update((root / name).read_bytes())

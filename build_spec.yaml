@@ -1,0 +1,19 @@
+version: 0.1
+component: build
+timeoutInSeconds: 1800
+shell: bash
+failImmediatelyOnError: true
+steps:
+  - type: Command
+    name: Build the OSMH Function image
+    timeoutInSeconds: 1700
+    command: |
+      set -euo pipefail
+      cd "${OCI_PRIMARY_SOURCE_DIR}"
+      # OL8 managed runners use Podman; Functions applications use GENERIC_X86.
+      podman build --platform linux/amd64 --format docker \
+        --file function/Dockerfile --tag localhost/osmh-function:build .
+outputArtifacts:
+  - name: osmh-function-image
+    type: DOCKER_IMAGE
+    location: localhost/osmh-function:build

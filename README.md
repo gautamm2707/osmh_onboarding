@@ -1,5 +1,24 @@
 # Tag-based OCI OS Management Hub onboarding
 
+## Deploy from the OCI Console
+
+The button loads the dedicated Resource Manager ZIP from this repository. Its root contains the new Console form and Terraform configuration. If an already-open wizard shows `auth` or `bootstrap_iam`, start again from the button or follow the [source correction steps](RESOURCE_MANAGER.md#if-configure-variables-still-shows-the-old-form).
+
+[Onboard in OSMH](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https%3A%2F%2Fgithub.com%2Fgautamm2707%2Fosmh_onboarding%2Fraw%2Frefs%2Fheads%2Fmain%2Fresource-manager%2Fosmh-resource-manager.zip)
+
+The repository root contains the Resource Manager Terraform and Console schema.
+The published ZIP is `resource-manager/osmh-resource-manager.zip`. The link opens
+Create Stack in your OCI session; review the configuration and run Plan/Apply.
+The stack can build the Function image through OCI DevOps or use an existing OCIR
+image, then deploy the Function, IAM, optional networking, logs and daily schedule.
+The form starts with region, compartment and Compute selection, followed by application/network choices and a daily UTC time. Apply starts a detached job that opts in selected instances through the defined tag. Existing Function applications use an OCID field because OCI has no native application dropdown; resource dropdowns use the Console region.
+
+Read the [updated blog](BLOG.md) and [Resource Manager deployment guide](RESOURCE_MANAGER.md).
+For a direct-upload ZIP, run `python3 package_resource_manager.py`. Keep Resource
+Manager and local deployments in separate, non-overlapping scopes. The instructions
+below describe the existing local CLI deployment path.
+
+
 `onboard_osmh.py <compartment-or-tenancy-OCID>` now scans the supplied root and
 all active descendants, excludes OKE workers, prompts for instance selection,
 creates a defined-tag namespace in the supplied compartment, and tags the selected

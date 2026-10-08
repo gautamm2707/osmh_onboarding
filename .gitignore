@@ -28,3 +28,4 @@ __pycache__/
 *.tfvars
 *.tfvars.json
 .deployment/
+/osmh-resource-manager-console-v1.1.zip
