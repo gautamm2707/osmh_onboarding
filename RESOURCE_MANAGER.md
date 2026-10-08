@@ -73,7 +73,7 @@ Fields named `auth` (default `APIKey`), `bootstrap_iam`, `compartment_id`, and `
 To load the updated form in the Create stack wizard:
 
 1. For the published package, cancel the uncreated wizard and open **Onboard in OSMH** again. To upload a local copy instead, select **Previous** to return to **Stack information**.
-2. Under configuration source, select **My configuration → .Zip file** and replace the old source with **`osmh-resource-manager-console-v1.6.zip`** from the project folder. This is a visible copy of the generated `.deployment/osmh-resource-manager.zip`.
+2. Under configuration source, select **My configuration → .Zip file** and replace the old source with **`osmh-resource-manager-console-v1.7.zip`** from the project folder. This is a visible copy of the generated `.deployment/osmh-resource-manager.zip`.
 3. If a working directory is requested, use the ZIP root (empty/default). The ZIP has `schema.yaml` and `orm_*.tf` directly at its root and excludes `deployment/`.
 4. Select **Next**. The first group should be **Compartment and Compute selection**, with **Deployment and onboarding compartment** and a dropdown-list control for **Compute instances to onboard**.
 5. If the wizard retains the previous source, cancel the uncreated stack and start a new Create stack wizard with this ZIP.
@@ -136,6 +136,8 @@ Apply success confirms that the detached invocation was accepted, not that taggi
 The configured IAM wait is a starting delay, not a guarantee of propagation. Dynamic-group membership can take longer. If the build fails with access errors, inspect its DevOps log and retry Apply after propagation; do not create a second stack. Increment `build_revision` to request a new run if needed. If the image was already delivered before a later failure, keep the existing successful build state while retrying Function deployment. Increment the revision before rebuilding, because the OCIR repository prevents overwriting existing tags.
 
 Published forms pin `source_commit`; Terraform callers can override it. Changing `source_commit` or `build_revision` replaces the build run and selects a new image tag. Reapplying identical inputs does not request a new build. Function updates request a new initial invocation when enabled. If the initial invoke is rejected, infrastructure can still exist; retry Apply after correcting the reported issue. Disabling `invoke_after_deploy` suppresses the initial job only when the Compute selection is empty. Pending registration is not a failed Terraform deployment.
+
+The first Apply waits ten minutes after creating IAM policies and dynamic groups because OCI propagates IAM changes from the home region to the deployment region asynchronously. If a build still fails, open **Developer Services → DevOps → Projects → Build runs** and inspect the run's lifecycle details and build log.
 
 Do not switch an established stack between creating and reusing its application/network/tag namespace, or between cloud builds and an existing image, without reviewing the plan. Such changes can destroy resources currently owned by the stack. Preserve the stack state and use the same stack for updates.
 

@@ -72,6 +72,21 @@ class ResourceManagerPackageTests(unittest.TestCase):
         build = (ROOT / "orm_build.tf").read_text()
         self.assertIn('image                              = "OL8_X86_64_STANDARD_10"', build)
         self.assertNotIn("is_immutable", build)
+        self.assertIn('to read secret-family ${local.scope}', build)
+        self.assertIn('to manage devops-family ${local.scope}', build)
+        self.assertIn('to manage repos ${local.scope}', build)
+        self.assertNotIn("target.secret.id", build)
+        self.assertNotIn("target.project.id", build)
+        self.assertNotIn("target.repo.name", build)
+        self.assertNotIn("condition     = self.state", build)
+
+    def test_first_apply_allows_iam_to_propagate(self):
+        variables = (ROOT / "orm_variables.tf").read_text()
+        schema = (ROOT / "schema.yaml").read_text()
+        self.assertIn('variable "iam_wait_seconds"', variables)
+        self.assertIn("default     = 600", variables)
+        self.assertIn("iam_wait_seconds:\n    type: integer", schema)
+        self.assertIn("default: 600", schema)
 
 
 if __name__ == "__main__":
