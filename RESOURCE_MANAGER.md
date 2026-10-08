@@ -58,22 +58,24 @@ The button's ZIP must be reachable without authentication. A private GitHub repo
 ## Cloud build prerequisites
 
 1. Publish a commit containing the Function sources, `function/Dockerfile`, and root `build_spec.yaml`.
-2. Create a GitHub PAT supported by OCI DevOps with repository read access, including any required organization authorization. Store it as a secret in OCI Vault and retain the secret OCID. The deploying identity must be allowed to configure the DevOps connection. Keep the secret in the deployment region for this workflow.
-3. Enter the repository HTTPS URL, branch, and full commit SHA in the stack. Pin to the reviewed commit. The stack creates a GitHub connection and grants only its connection/build-pipeline dynamic group access to that secret.
+2. Create a GitHub PAT supported by OCI DevOps with repository read access, including any required organization authorization. Store it as a secret in OCI Vault in the deployment compartment and region. The form provides a Vault-secret dropdown; the raw token is never entered into Resource Manager.
+3. Enter the full published commit SHA in the stack. The repository and branch are fixed by the published form. The stack creates a GitHub connection and grants only its connection/build-pipeline dynamic group access to that secret.
 4. Apply builds on the managed Oracle Linux 8 x86 runner with Podman. A Deliver Artifacts stage pushes the image without an OCIR user auth token. Terraform waits for `SUCCEEDED` before creating/updating the Function.
 
-Alternatively, disable `build_function_image` and supply `existing_image` from this tenancy's selected-region OCIR. The image must contain the updated worker/FDK entrypoint and `osmh_selection.py` from this configuration and target Linux AMD64. Use a unique version tag, not `latest`. No build project, GitHub connection, Vault access policy, or new registry repository is created in this mode.
+The Console form intentionally does not expose Function-image choices. It builds the image and delivers it to a private OCIR repository. Terraform callers can still use the hidden compatibility variables to supply an existing image, but that is not part of the guided Console workflow.
+
+Do not enter an OCIR `AUTH_TOKEN`. Auth tokens are used by local Docker/Fn clients. In this stack, OCI DevOps delivers the image with its resource principal and OCI Functions pulls it through the stack's repository IAM policy. The Function invocation itself uses OCI IAM, not an OCIR credential.
 
 ## If Configure variables still shows the old form
 
-Fields named `auth` (default `APIKey`), `bootstrap_iam`, `compartment_id`, and `home_region` identify the separate CLI configuration in `deployment/variables.tf`. The Resource Manager configuration uses `compartment_ocid`, supplies credentials automatically, and starts with the **Region, compartment and Compute selection** group.
+Fields named `auth` (default `APIKey`), `bootstrap_iam`, `compartment_id`, and `home_region` identify the separate CLI configuration in `deployment/variables.tf`. The Resource Manager configuration uses `compartment_ocid`, supplies credentials automatically, and starts with the **Compartment and Compute selection** group.
 
 To load the updated form in the Create stack wizard:
 
 1. For the published package, cancel the uncreated wizard and open **Onboard in OSMH** again. To upload a local copy instead, select **Previous** to return to **Stack information**.
-2. Under configuration source, select **My configuration → .Zip file** and replace the old source with **`osmh-resource-manager-console-v1.1.zip`** from the project folder. This is a visible copy of the generated `.deployment/osmh-resource-manager.zip`.
+2. Under configuration source, select **My configuration → .Zip file** and replace the old source with **`osmh-resource-manager-console-v1.2.zip`** from the project folder. This is a visible copy of the generated `.deployment/osmh-resource-manager.zip`.
 3. If a working directory is requested, use the ZIP root (empty/default). The ZIP has `schema.yaml` and `orm_*.tf` directly at its root and excludes `deployment/`.
-4. Select **Next**. The first group should be **Region, compartment and Compute selection**, with **Region**, **Deployment and onboarding compartment**, and **Compute instances to onboard**.
+4. Select **Next**. The first group should be **Compartment and Compute selection**, with **Deployment and onboarding compartment** and a dropdown-list control for **Compute instances to onboard**.
 5. If the wizard retains the previous source, cancel the uncreated stack and start a new Create stack wizard with this ZIP.
 
 A browser refresh does not replace a configuration already loaded in the wizard. The blog button loads the dedicated published ZIP; future local edits require regenerating and pushing that ZIP. For a full repository archive obtained separately, choose the directory containing `schema.yaml` and `orm_variables.tf` as the working directory, rather than its `deployment/` child.
@@ -86,16 +88,17 @@ The form presents these controls in order:
 
 | Order | Control | Behavior |
 | --- | --- | --- |
-| 1 | Region | Subscribed-region dropdown, initially the Console region |
+| 1 | Region | Current subscribed region selected from the OCI Console region menu |
 | 2 | Compartment | Compartments visible to the signed-in identity |
-| 3 | Compute instances | Add one dropdown selection per instance; each list depends on the compartment |
+| 3 | Compute instances | Dynamic dropdown list populated from the selected compartment |
 | 4 | Function application | Create a new application, or enter an existing application's OCID |
 | 5 | Networking for a new application | Create VCN/subnet/NAT/routes/security rules, or choose a VCN and then its regional subnet |
 | 6 | Daily schedule | Enable/disable and choose a UTC time in 15-minute intervals |
+| 7 | Function build authentication | Published commit SHA and a Vault dropdown for the GitHub token secret |
 
-Image, tagging and advanced settings follow these controls. The default time remains **16:30 UTC** (22:00 IST). Terraform callers can supply any valid `HH:MM` time through `schedule_time_utc`.
+Tagging and advanced settings follow these controls. The default time remains **16:30 UTC** (22:00 IST). Terraform callers can supply any valid `HH:MM` time through `schedule_time_utc`.
 
-**Native Console limits:** Oracle's schema supports compartment-dependent instance/VCN lists and VCN-dependent subnet lists, but no Function application picker or region dependency for those resource lists. Regional dropdowns use the Console's current region. Switch the Console region before opening the form and keep the Region field aligned; the stack rejects a mismatch. Existing applications therefore use an OCID field validated during Plan. A generated, tenancy-specific schema could provide static application choices, but would need regeneration when applications change. See [Oracle's supported schema](https://docs.oracle.com/en-us/iaas/Content/ResourceManager/Concepts/terraformconfigresourcemanager_topic-schema.htm).
+**Native Console limits:** Oracle's schema cannot filter its region field to a tenancy's subscriptions, so the form binds the deployment to `${session.region}` and hides the redundant field. Choose a subscribed region in the OCI Console before opening the form. The Compute resource picker accepts one compartment and does not recursively aggregate descendants into one dropdown. Select instances in the chosen compartment; the scheduled worker still scans its descendant tree for instances opted in later. Oracle's schema also has no Function application picker, so existing applications use an OCID field validated during Plan. See [Oracle's supported schema](https://docs.oracle.com/en-us/iaas/Content/ResourceManager/Concepts/terraformconfigresourcemanager_topic-schema.htm).
 
 After changing compartment, reselect instances, application and networking. Dropdowns show resources the caller can view; they do not grant access. Plan validates selected instance state/scope, existing application state/shape/scope, and subnet scope/VCN. Guest OS and OKE checks run inside the initial Function invocation.
 

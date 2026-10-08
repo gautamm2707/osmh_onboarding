@@ -1,25 +1,25 @@
 title: Onboard in OSMH
 description: Deploy scheduled tag-based OS Management Hub onboarding in your OCI tenancy.
 schemaVersion: 1.1.0
-version: "1.1"
+version: "1.2"
 locale: en
-informationalText: Select the same region in the Console navigation and this form. Apply opts in the selected instances and starts onboarding. Daily runs reconcile tagged instances. Cloud builds require a GitHub PAT in OCI Vault and a published source commit.
+informationalText: The stack deploys in the current OCI Console region. Use the Console region menu to select one of the tenancy's subscribed regions before opening this form. Apply opts in the selected instances and starts onboarding. Daily runs reconcile tagged instances.
 variableGroups:
-  - title: Region, compartment and Compute selection
-    variables: ['${region}', '${compartment_ocid}', '${selected_instance_ids}']
+  - title: Compartment and Compute selection
+    variables: ['${compartment_ocid}', '${selected_instance_ids}']
   - title: Function application and networking
     variables: ['${create_function_application}', '${application_id}', '${create_network}', '${existing_vcn_id}', '${existing_subnet_id}']
   - title: Daily schedule
     variables: ['${schedule_enabled}', '${schedule_time_utc}']
-  - title: Function image
-    variables: ['${build_function_image}', '${source_repository_url}', '${source_branch}', '${source_commit}', '${github_token_secret_id}', '${build_revision}', '${existing_image}']
+  - title: Function build authentication
+    variables: ['${source_commit}', '${github_token_secret_id}']
   - title: Instance opt in and access
     variables: ['${tag_namespace}', '${use_existing_tag_namespace}', '${existing_tag_namespace_id}', '${create_instance_iam}']
   - title: Advanced operations
     variables: ['${workload_regions}', '${repository_families}', '${group_prefix}', '${logging_enabled}', '${invoke_after_deploy}', '${iam_wait_seconds}']
   - title: Console context
     visible: false
-    variables: ['${tenancy_ocid}', '${console_region}', '${subnet_ids}']
+    variables: ['${tenancy_ocid}', '${region}', '${console_region}', '${selected_instance_id}', '${subnet_ids}', '${build_function_image}', '${source_repository_url}', '${source_branch}', '${build_revision}', '${existing_image}']
 variables:
   tenancy_ocid:
     type: string
@@ -30,67 +30,61 @@ variables:
     visible: false
   region:
     type: oci:identity:region:name
-    title: Region
-    required: true
     default: ${session.region}
-    description: Use the Console navigation to switch region before opening this form. Regional resource dropdowns use the Console region.
+    visible: false
   compartment_ocid:
     type: oci:identity:compartment:id
     title: Deployment and onboarding compartment
     required: true
     description: Deploy resources here and scan this compartment and its descendants. Select a dedicated scope that no other deployment manages.
   selected_instance_ids:
-    type: array
+    type: list
+    valueType: selected_instance_id
     title: Compute instances to onboard
-    description: Add a selection for each instance. Lists instances you can view in the selected compartment. Select RUNNING supported non-OKE instances. Removing a selection later does not remove its opt-in tag.
-    items:
-      type: oci:core:instance:id
-      title: Compute instance
-      dependsOn:
-        compartmentId: ${compartment_ocid}
-    uniqueItems: true
+    description: Select one or more RUNNING supported non-OKE instances from the chosen compartment. The scheduled worker scans this compartment and its descendants for instances opted in later. Removing a selection does not remove its opt-in tag.
+    required: true
+  selected_instance_id:
+    type: oci:core:instance:id
+    title: Compute instance
+    visible: false
+    dependsOn:
+      compartmentId: ${compartment_ocid}
   workload_regions:
     type: string
     title: Workload regions
     description: Leave empty for the selected deployment region, enter comma-separated region names without spaces, or enter all.
   build_function_image:
     type: boolean
-    title: Build the Function image in OCI DevOps
     default: true
+    visible: false
   source_repository_url:
     type: string
-    title: GitHub source repository
-    required: true
-    visible: ${build_function_image}
+    default: https://github.com/gautamm2707/osmh_onboarding.git
+    visible: false
   source_branch:
     type: string
-    title: Source branch
-    required: true
-    visible: ${build_function_image}
+    default: main
+    visible: false
   source_commit:
     type: string
-    title: Full source commit SHA
-    description: Enter the published 40-character commit containing build_spec.yaml and function/Dockerfile.
+    title: Published source commit SHA
+    description: Full 40-character commit from this repository. Pinning the build ensures the deployed Function matches the reviewed stack source. Use the commit shown on the published blog page.
     required: true
-    visible: ${build_function_image}
   github_token_secret_id:
-    type: string
-    title: GitHub token Vault secret OCID
-    description: Existing OCI Vault secret containing a PAT authorized to read the repository. Enter its OCID, never the token value.
+    type: oci:kms:secret:id
+    title: GitHub access token secret
+    description: "Select an OCI Vault secret containing a GitHub PAT that can read the source repository. OCI DevOps receives only the secret OCID. An OCIR AUTH_TOKEN is not used: DevOps delivers the image and OCI Functions pulls it using IAM."
     required: true
-    visible: ${build_function_image}
+    dependsOn:
+      compartmentId: ${compartment_ocid}
   build_revision:
     type: string
-    title: Build revision
-    description: Increment for a new image build at the same commit. Immutable image tags cannot be overwritten.
-    visible: ${build_function_image}
+    default: "1"
+    visible: false
   existing_image:
     type: string
-    title: Existing Function image URI
-    description: Versioned Linux AMD64 image in this tenancy's selected-region OCIR. Example iad.ocir.io/namespace/repository:version.
-    required: true
-    visible:
-      not: ['${build_function_image}']
+    default: ""
+    visible: false
   create_function_application:
     type: boolean
     title: Create a new Function application

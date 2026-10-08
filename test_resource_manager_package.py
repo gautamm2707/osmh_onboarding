@@ -5,7 +5,7 @@ import unittest
 import zipfile
 from urllib.parse import parse_qs, urlsplit
 
-from package_resource_manager import PACKAGE_FILES, deploy_url, package
+from package_resource_manager import PACKAGE_FILES, ROOT, deploy_url, package
 
 
 class ResourceManagerPackageTests(unittest.TestCase):
@@ -52,6 +52,15 @@ class ResourceManagerPackageTests(unittest.TestCase):
         for value in ("http://example.org/a.zip", "https://user:secret@example.org/a.zip", "file:///a.zip", "https://example.org/a.zip#fragment"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 deploy_url(value)
+
+    def test_console_schema_uses_dynamic_compute_list_and_managed_auth(self):
+        schema = (ROOT / "schema.yaml").read_text()
+        self.assertIn("type: list\n    valueType: selected_instance_id", schema)
+        self.assertIn("type: oci:core:instance:id", schema)
+        self.assertIn("type: oci:kms:secret:id", schema)
+        self.assertIn("default: ${session.region}\n    visible: false", schema)
+        self.assertNotIn("title: Function image", schema)
+        self.assertNotIn("ocir_auth_token", schema.casefold())
 
 
 if __name__ == "__main__":

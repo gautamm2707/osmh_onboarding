@@ -11,7 +11,7 @@ The published ZIP is `resource-manager/osmh-resource-manager.zip`. The link open
 Create Stack in your OCI session; review the configuration and run Plan/Apply.
 The stack can build the Function image through OCI DevOps or use an existing OCIR
 image, then deploy the Function, IAM, optional networking, logs and daily schedule.
-The form starts with region, compartment and Compute selection, followed by application/network choices and a daily UTC time. Apply starts a detached job that opts in selected instances through the defined tag. Existing Function applications use an OCID field because OCI has no native application dropdown; resource dropdowns use the Console region.
+The form uses the current subscribed Console region, then presents compartment and Compute dropdown selection, application/network choices, a daily UTC time, and build-source authentication. Apply starts a detached job that opts in selected instances through the defined tag. Existing Function applications use an OCID field because OCI has no native application dropdown.
 
 Read the [updated blog](BLOG.md) and [Resource Manager deployment guide](RESOURCE_MANAGER.md).
 For a direct-upload ZIP, run `python3 package_resource_manager.py`. Keep Resource
