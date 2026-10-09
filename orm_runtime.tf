@@ -116,7 +116,7 @@ resource "oci_logging_log" "worker" {
 resource "terraform_data" "runtime_iam" {
   depends_on = [oci_identity_policy.worker, oci_identity_policy.instances, oci_identity_policy.scheduler]
   provisioner "local-exec" {
-    command = "sleep ${var.iam_wait_seconds}"
+    command = "sleep ${var.runtime_iam_wait_seconds}"
   }
   triggers_replace = {
     worker_policy   = sha256(jsonencode(oci_identity_policy.worker.statements))

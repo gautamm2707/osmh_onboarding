@@ -1,5 +1,6 @@
 # OCI DevOps builds inside OCI and delivers through a resource principal.
-# Only the existing Vault secret OCID enters Terraform; its contents are never read here.
+# Terraform stores only the existing Vault secret OCID. The preflight reads the
+# current token into process memory and never writes or prints it.
 resource "oci_ons_notification_topic" "build" {
   count          = var.build_function_image ? 1 : 0
   depends_on     = [terraform_data.validate]
@@ -164,9 +165,18 @@ resource "terraform_data" "build_iam" {
   count      = var.build_function_image ? 1 : 0
   depends_on = [oci_identity_policy.build_pipeline, oci_identity_policy.connection]
   provisioner "local-exec" {
-    command = "sleep ${var.iam_wait_seconds}"
+    command = "python3 \"${path.module}/validate_build_connection.py\" --connection-id \"$OSMH_CONNECTION_ID\" --secret-id \"$OSMH_SECRET_ID\" --repository-url \"$OSMH_REPOSITORY_URL\" --commit \"$OSMH_SOURCE_COMMIT\" --build-spec build_spec.yaml --region \"$OSMH_REGION\" --timeout-seconds \"$OSMH_TIMEOUT_SECONDS\""
+    environment = {
+      OSMH_CONNECTION_ID   = oci_devops_connection.github[0].id
+      OSMH_SECRET_ID       = var.github_token_secret_id
+      OSMH_REPOSITORY_URL  = var.source_repository_url
+      OSMH_SOURCE_COMMIT   = var.source_commit
+      OSMH_REGION          = var.region
+      OSMH_TIMEOUT_SECONDS = tostring(var.iam_wait_seconds)
+    }
   }
   triggers_replace = {
+    validation_run        = plantimestamp()
     build_pipeline_policy = sha256(jsonencode(oci_identity_policy.build_pipeline[0].statements))
     connection_policy     = sha256(jsonencode(oci_identity_policy.connection[0].statements))
   }

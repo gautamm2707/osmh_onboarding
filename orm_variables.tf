@@ -147,10 +147,20 @@ variable "invoke_after_deploy" {
 variable "iam_wait_seconds" {
   type        = number
   default     = 3600
-  description = "Initial delay for IAM and dynamic-group propagation. OCI documents that a new or changed dynamic-group rule can require about one hour before its resource principal is authorized."
+  description = "Maximum time to poll OCI DevOps connection validation while IAM and dynamic-group changes propagate. Validation proceeds immediately when the connection is ready."
   validation {
     condition     = var.iam_wait_seconds >= 60 && var.iam_wait_seconds <= 3600 && floor(var.iam_wait_seconds) == var.iam_wait_seconds
     error_message = "Use an integer from 60 to 3600 seconds."
+  }
+}
+
+variable "runtime_iam_wait_seconds" {
+  type        = number
+  default     = 120
+  description = "Short initial wait before the detached Function invocation. Increase only if Function logs show that newly created operational IAM policies have not propagated."
+  validation {
+    condition     = var.runtime_iam_wait_seconds >= 0 && var.runtime_iam_wait_seconds <= 3600 && floor(var.runtime_iam_wait_seconds) == var.runtime_iam_wait_seconds
+    error_message = "Use an integer from 0 to 3600 seconds."
   }
 }
 

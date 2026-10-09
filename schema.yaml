@@ -1,7 +1,7 @@
 title: Onboard in OSMH
 description: Deploy scheduled tag-based OS Management Hub onboarding in your OCI tenancy.
 schemaVersion: 1.1.0
-version: "1.9"
+version: "1.10"
 locale: en
 informationalText: Select the deployment region and target compartment below. The target compartment can differ from the compartment that stores the stack. Apply validates and opts in selected instances. Daily runs reconcile tagged instances across the target compartment tree.
 variableGroups:
@@ -16,7 +16,7 @@ variableGroups:
   - title: Instance opt in and access
     variables: ['${tag_namespace}', '${use_existing_tag_namespace}', '${existing_tag_namespace_id}', '${create_instance_iam}']
   - title: Advanced operations
-    variables: ['${workload_regions}', '${repository_families}', '${group_prefix}', '${logging_enabled}', '${invoke_after_deploy}', '${iam_wait_seconds}']
+    variables: ['${workload_regions}', '${repository_families}', '${group_prefix}', '${logging_enabled}', '${invoke_after_deploy}', '${iam_wait_seconds}', '${runtime_iam_wait_seconds}']
   - title: Console context
     visible: false
     variables: ['${tenancy_ocid}', '${compartment_ocid}', '${selected_instance_id}', '${subnet_ids}', '${build_function_image}', '${source_repository_url}', '${source_branch}', '${source_commit}', '${build_revision}', '${existing_image}']
@@ -278,10 +278,17 @@ variables:
     default: true
   iam_wait_seconds:
     type: integer
-    title: Initial IAM propagation wait in seconds
-    description: OCI documents that new or changed dynamic-group rules can require about one hour to authorize their resource principals. The first Apply waits before starting the build.
+    title: Build connection readiness timeout in seconds
+    description: Apply verifies the Vault PAT and pinned GitHub source, then polls OCI DevOps connection validation. It starts the build immediately when ready and stops after this limit.
     default: 3600
     minimum: 60
+    maximum: 3600
+  runtime_iam_wait_seconds:
+    type: integer
+    title: Initial Function IAM wait in seconds
+    description: Short wait before the detached initial invocation. Increase only when Function logs show that new operational IAM policies have not propagated.
+    default: 120
+    minimum: 0
     maximum: 3600
 outputs:
   function_id:

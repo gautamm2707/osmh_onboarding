@@ -6,6 +6,7 @@ import zipfile
 from urllib.parse import parse_qs, urlsplit
 
 from package_resource_manager import PACKAGE_FILES, ROOT, deploy_url, package
+from validate_build_connection import ValidationError, oci_error_summary, repository_coordinates
 
 
 class ResourceManagerPackageTests(unittest.TestCase):
@@ -53,6 +54,27 @@ class ResourceManagerPackageTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 deploy_url(value)
 
+    def test_build_repository_url_is_strict_and_parsed(self):
+        self.assertEqual(
+            repository_coordinates("https://github.com/gautamm2707/osmh_onboarding.git"),
+            ("gautamm2707", "osmh_onboarding"),
+        )
+        for value in (
+            "http://github.com/owner/repo",
+            "https://token@github.com/owner/repo",
+            "https://github.com/owner/repo/extra",
+            "https://example.com/owner/repo",
+        ):
+            with self.subTest(value=value), self.assertRaises(ValidationError):
+                repository_coordinates(value)
+
+    def test_oci_error_summary_excludes_cli_noise(self):
+        output = 'TransientServiceError:\n{"code":"InternalError","message":"Unable to validate","opc-request-id":"request-id"}\n'
+        self.assertEqual(
+            oci_error_summary(output),
+            "InternalError: Unable to validate: request request-id",
+        )
+
     def test_console_schema_uses_dynamic_compute_list_and_managed_auth(self):
         schema = (ROOT / "schema.yaml").read_text()
         self.assertIn("type: list\n    valueType: selected_instance_id", schema)
@@ -91,10 +113,19 @@ class ResourceManagerPackageTests(unittest.TestCase):
     def test_first_apply_allows_iam_to_propagate(self):
         variables = (ROOT / "orm_variables.tf").read_text()
         schema = (ROOT / "schema.yaml").read_text()
+        build = (ROOT / "orm_build.tf").read_text()
         self.assertIn('variable "iam_wait_seconds"', variables)
         self.assertIn("default     = 3600", variables)
         self.assertIn("iam_wait_seconds:\n    type: integer", schema)
         self.assertIn("default: 3600", schema)
+        self.assertIn("validate_build_connection.py", build)
+        self.assertIn("validation_run        = plantimestamp()", build)
+        self.assertNotIn('command = "sleep ${var.iam_wait_seconds}"', build)
+        self.assertIn("validate_build_connection.py", PACKAGE_FILES)
+        self.assertIn('variable "runtime_iam_wait_seconds"', variables)
+        self.assertIn("default     = 120", variables)
+        runtime = (ROOT / "orm_runtime.tf").read_text()
+        self.assertIn('command = "sleep ${var.runtime_iam_wait_seconds}"', runtime)
 
 
 if __name__ == "__main__":

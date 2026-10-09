@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent
 PACKAGE_FILES = (
     "orm_versions.tf", "orm_variables.tf", "orm_network.tf", "orm_build.tf",
     "orm_tags_iam.tf", "orm_runtime.tf", "orm_outputs.tf", "schema.yaml",
-    "build_spec.yaml", "onboard_osmh.py", "reconcile_osmh.py", "osmh_discovery.py",
+    "build_spec.yaml", "validate_build_connection.py", "onboard_osmh.py", "reconcile_osmh.py", "osmh_discovery.py",
     "osmh_iam.py", "osmh_runtime.py", "osmh_tags.py", "osmh_deployment.py",
     "osmh_function_setup.py", "osmh_selection.py", "function/Dockerfile", "function/requirements.txt",
     "function/func.py", "BLOG.md", "RESOURCE_MANAGER.md", ".terraform.lock.hcl",
