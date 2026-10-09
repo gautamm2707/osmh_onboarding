@@ -1,7 +1,12 @@
 FROM container-registry.oracle.com/oci_functions/python:3.12-dev AS build
 WORKDIR /function
 COPY function/requirements.txt /function/requirements.txt
-RUN pip3 install --no-cache-dir --target /python -r requirements.txt
+# The Oracle Functions build image can carry an Oracle-internal pip index.
+# Managed OCI DevOps runners cannot resolve that private hostname, so select
+# the public package index explicitly for this public dependency set.
+RUN pip3 install --index-url https://pypi.org/simple \
+    --disable-pip-version-check --no-cache-dir \
+    --target /python -r requirements.txt
 
 FROM container-registry.oracle.com/oci_functions/python:3.12
 WORKDIR /function
