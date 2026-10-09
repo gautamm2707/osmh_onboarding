@@ -94,20 +94,57 @@ resource "oci_logging_log_group" "worker" {
   lifecycle { ignore_changes = [display_name] }
 }
 
-resource "oci_logging_log" "worker" {
-  count              = var.logging_enabled ? 1 : 0
-  display_name       = "function-invocations"
-  log_group_id       = oci_logging_log_group.worker.id
-  log_type           = "SERVICE"
-  is_enabled         = true
-  retention_duration = 30
-  configuration {
-    compartment_id = local.target_compartment_id
-    source {
-      category    = "invoke"
-      resource    = local.application_id
-      service     = "functions"
-      source_type = "OCISERVICE"
+removed {
+  from = oci_logging_log.worker
+  lifecycle { destroy = false }
+}
+
+removed {
+  from = oci_logging_log.build
+  lifecycle { destroy = false }
+}
+
+resource "terraform_data" "service_logs" {
+  depends_on = [oci_logging_log_group.worker, oci_functions_application.worker, data.oci_functions_application.existing, oci_devops_project.build]
+  input = {
+    compartment_id          = local.target_compartment_id
+    log_group_id            = oci_logging_log_group.worker.id
+    region                  = var.region
+    deployment_id           = local.suffix
+    function_application_id = local.application_id
+    devops_project_id       = var.build_function_image ? oci_devops_project.build[0].id : ""
+    enabled                 = var.logging_enabled
+  }
+  triggers_replace = {
+    compartment_id          = local.target_compartment_id
+    log_group_id            = oci_logging_log_group.worker.id
+    region                  = var.region
+    deployment_id           = local.suffix
+    function_application_id = local.application_id
+    devops_project_id       = var.build_function_image ? oci_devops_project.build[0].id : ""
+    enabled                 = tostring(var.logging_enabled)
+  }
+  provisioner "local-exec" {
+    command = "python3 \"${path.module}/ensure_service_logs.py\" ensure --compartment-id \"$OSMH_COMPARTMENT_ID\" --log-group-id \"$OSMH_LOG_GROUP_ID\" --region \"$OSMH_REGION\" --deployment-id \"$OSMH_DEPLOYMENT_ID\" --function-application-id \"$OSMH_APPLICATION_ID\" --devops-project-id \"$OSMH_DEVOPS_PROJECT_ID\" --enabled \"$OSMH_LOGGING_ENABLED\""
+    environment = {
+      OSMH_COMPARTMENT_ID    = self.input.compartment_id
+      OSMH_LOG_GROUP_ID      = self.input.log_group_id
+      OSMH_REGION            = self.input.region
+      OSMH_DEPLOYMENT_ID     = self.input.deployment_id
+      OSMH_APPLICATION_ID    = self.input.function_application_id
+      OSMH_DEVOPS_PROJECT_ID = self.input.devops_project_id
+      OSMH_LOGGING_ENABLED   = tostring(self.input.enabled)
+    }
+  }
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = "python3 \"${path.module}/ensure_service_logs.py\" cleanup --compartment-id \"$OSMH_COMPARTMENT_ID\" --log-group-id \"$OSMH_LOG_GROUP_ID\" --region \"$OSMH_REGION\" --deployment-id \"$OSMH_DEPLOYMENT_ID\""
+    environment = {
+      OSMH_COMPARTMENT_ID = self.input.compartment_id
+      OSMH_LOG_GROUP_ID   = self.input.log_group_id
+      OSMH_REGION         = self.input.region
+      OSMH_DEPLOYMENT_ID  = self.input.deployment_id
     }
   }
 }
@@ -126,7 +163,7 @@ resource "terraform_data" "runtime_iam" {
 }
 resource "oci_functions_invoke_function" "initial" {
   count                = (var.invoke_after_deploy || var.onboard_all_instances || length(local.selected_ids) > 0) ? 1 : 0
-  depends_on           = [terraform_data.runtime_iam, oci_logging_log.worker, oci_identity_tag_default.new_opt_in, oci_identity_tag_default.existing_opt_in]
+  depends_on           = [terraform_data.runtime_iam, terraform_data.service_logs, oci_identity_tag_default.new_opt_in, oci_identity_tag_default.existing_opt_in]
   function_id          = oci_functions_function.worker.id
   fn_invoke_type       = "detached"
   invoke_function_body = var.onboard_all_instances ? jsonencode({ onboard_all_instances = true }) : (length(local.selected_ids) > 0 ? jsonencode({ onboard_instance_ids = local.selected_ids }) : "{}")

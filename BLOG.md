@@ -10,7 +10,7 @@ A platform team manages instances across development, testing, and production co
 
 ## Prerequisites
 
-- **OCI access:** Permission to manage Resource Manager stacks and jobs, Functions, schedules, networking, logging, defined tags and compartment tag defaults, dynamic groups, and tenancy IAM policies. Cloud builds also require DevOps, Container Registry, and Notifications permissions.
+- **OCI access:** Permission to manage Resource Manager stacks and jobs, Functions, schedules, networking, logging, defined tags and compartment tag defaults, dynamic groups, and tenancy IAM policies. The stack reuses an existing Function or DevOps service log for the same OCI source instead of creating a duplicate. Cloud builds also require DevOps, Container Registry, and Notifications permissions.
 - **Deployment region:** A commercial OCI tenancy with an active region subscription, required services, and available quotas. Choose the subscribed region from the OCI Console region menu before opening the deployment link.
 - **Function build:** An OCI Vault secret containing a GitHub access token that can read the source repository. The secret can be stored in a compartment separate from the deployment compartment. The published stack pins the reviewed source commit automatically, then builds and delivers the Function image.
 - **Build resource principals:** The stack creates exact-resource dynamic groups for its DevOps pipeline and GitHub connection. OCI requires tenancy-scoped `devops-family` and `secret-family` grants for external source retrieval; review these IAM statements before Apply. Apply validates the PAT and pinned source, polls the OCI connection, and retries transient source-download IAM failures within a bounded timeout.

@@ -129,6 +129,14 @@ class ResourceManagerPackageTests(unittest.TestCase):
         self.assertIn('data "oci_vault_secret" "github_token"', build)
         self.assertIn("self.compartment_id == local.secret_compartment_id", build)
 
+    def test_service_logs_are_reconciled_instead_of_blindly_created(self):
+        runtime = (ROOT / "orm_runtime.tf").read_text()
+        self.assertIn('resource "terraform_data" "service_logs"', runtime)
+        self.assertIn('removed {\n  from = oci_logging_log.worker', runtime)
+        self.assertIn('removed {\n  from = oci_logging_log.build', runtime)
+        self.assertNotIn('resource "oci_logging_log"', runtime + (ROOT / "orm_build.tf").read_text())
+        self.assertIn("ensure_service_logs.py", PACKAGE_FILES)
+
     def test_cloud_build_uses_supported_runner_and_repository_settings(self):
         build = (ROOT / "orm_build.tf").read_text()
         dockerfile = (ROOT / "function/Dockerfile").read_text()

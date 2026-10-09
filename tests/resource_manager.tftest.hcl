@@ -234,7 +234,7 @@ run "reuse_existing_application" {
     logging_enabled             = false
   }
   assert {
-    condition     = length(oci_functions_application.worker) == 0 && length(oci_core_vcn.function) == 0 && length(oci_logging_log.worker) == 0
+    condition     = length(oci_functions_application.worker) == 0 && length(oci_core_vcn.function) == 0 && terraform_data.service_logs.input.enabled == false
     error_message = "Reusing an application must not create an application, network, or disabled log."
   }
 }

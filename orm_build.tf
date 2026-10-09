@@ -25,23 +25,6 @@ resource "oci_devops_project" "build" {
   lifecycle { ignore_changes = [name] }
   notification_config { topic_id = oci_ons_notification_topic.build[0].id }
 }
-resource "oci_logging_log" "build" {
-  count              = var.build_function_image ? 1 : 0
-  display_name       = "devops-builds"
-  log_group_id       = oci_logging_log_group.worker.id
-  log_type           = "SERVICE"
-  is_enabled         = true
-  retention_duration = 30
-  configuration {
-    compartment_id = local.target_compartment_id
-    source {
-      category    = "all"
-      resource    = oci_devops_project.build[0].id
-      service     = "devops"
-      source_type = "OCISERVICE"
-    }
-  }
-}
 resource "oci_devops_connection" "github" {
   count           = var.build_function_image ? 1 : 0
   depends_on      = [data.oci_vault_secret.github_token]
@@ -195,7 +178,7 @@ resource "terraform_data" "build_iam" {
 }
 resource "terraform_data" "build_run" {
   count      = var.build_function_image ? 1 : 0
-  depends_on = [terraform_data.build_iam, oci_devops_build_pipeline_stage.deliver, oci_logging_log.build]
+  depends_on = [terraform_data.build_iam, oci_devops_build_pipeline_stage.deliver, terraform_data.service_logs]
   triggers_replace = {
     pipeline   = oci_devops_build_pipeline.image[0].id
     commit     = var.source_commit
