@@ -66,6 +66,15 @@ variable "github_token_secret_id" {
   default     = ""
   description = "OCID of an existing OCI Vault secret containing a GitHub PAT; never enter the token itself. Required for cloud builds."
 }
+variable "github_token_secret_compartment_ocid" {
+  type        = string
+  default     = ""
+  description = "Compartment containing the existing GitHub PAT Vault secret. Empty preserves compatibility by using the deployment compartment."
+  validation {
+    condition     = var.github_token_secret_compartment_ocid == "" || can(regex("^ocid1\\.(compartment|tenancy)\\.", var.github_token_secret_compartment_ocid))
+    error_message = "Use a compartment or tenancy OCID."
+  }
+}
 variable "build_revision" {
   type        = string
   default     = "1"
@@ -100,7 +109,7 @@ variable "application_id" {
 variable "tag_namespace" {
   type        = string
   default     = "OSMH"
-  description = "New namespace prefix (first 67 characters plus a per-stack suffix), or the exact name when reusing a namespace. Existing managed namespace names are preserved on upgrades."
+  description = "Namespace name to reuse automatically when an active exact-name match exists; otherwise a unique per-stack namespace is created from this prefix."
   validation {
     condition     = can(regex("^[A-Za-z][A-Za-z0-9_]{0,99}$", var.tag_namespace))
     error_message = "Use a namespace starting with a letter, followed by letters, digits or underscores (max 100)."

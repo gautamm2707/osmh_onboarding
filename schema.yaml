@@ -1,7 +1,7 @@
 title: Onboard in OSMH
 description: Deploy scheduled tag-based OS Management Hub onboarding in your OCI tenancy.
 schemaVersion: 1.1.0
-version: "1.14"
+version: "1.15"
 locale: en
 informationalText: Select the deployment region and target compartment below. The target compartment can differ from the compartment that stores the stack. Apply validates and opts in selected instances. Daily runs reconcile tagged instances across the target compartment tree.
 variableGroups:
@@ -12,7 +12,7 @@ variableGroups:
   - title: Daily schedule
     variables: ['${schedule_enabled}', '${schedule_time_utc}']
   - title: Function build authentication
-    variables: ['${github_token_secret_id}']
+    variables: ['${github_token_secret_compartment_ocid}', '${github_token_secret_id}']
   - title: Instance opt in and access
     variables: ['${tag_namespace}', '${use_existing_tag_namespace}', '${existing_tag_namespace_id}', '${create_instance_iam}']
   - title: Advanced operations
@@ -75,13 +75,18 @@ variables:
     type: string
     default: fa608e009ec575c277a268a25975db3eef7b3282
     visible: false
+  github_token_secret_compartment_ocid:
+    type: oci:identity:compartment:id
+    title: GitHub token secret compartment
+    description: Select the compartment that contains the OCI Vault secret holding the GitHub access token. This selection is independent of the deployment and onboarding compartment.
+    required: true
   github_token_secret_id:
     type: oci:kms:secret:id
     title: GitHub access token secret
     description: "Select an OCI Vault secret containing a GitHub PAT that can read the source repository. OCI DevOps receives only the secret OCID. An OCIR AUTH_TOKEN is not used: DevOps delivers the image and OCI Functions pulls it using IAM."
     required: true
     dependsOn:
-      compartmentId: ${target_compartment_ocid}
+      compartmentId: ${github_token_secret_compartment_ocid}
   build_revision:
     type: string
     default: "1"
@@ -139,13 +144,13 @@ variables:
   tag_namespace:
     type: string
     title: Tag namespace prefix (or existing namespace name)
-    description: New namespaces receive a unique stack suffix automatically. When reusing a namespace, enter its exact name. Existing stack namespace names are preserved on upgrade.
+    description: Enter a namespace name. The stack automatically reuses an active exact-name match and its managedby key, or creates the missing key. If the namespace does not exist, a new namespace receives a unique stack suffix.
     default: OSMH
   use_existing_tag_namespace:
     type: boolean
     title: Reuse an existing namespace and managedby key
     default: false
-    description: Optional. New stacks create their own uniquely named namespace by default, even if OSMH already exists. Enable only to intentionally share an existing namespace and managedby key.
+    description: Optional override. Exact-name namespaces are reused automatically. Enable only to require a specific namespace OCID.
   existing_tag_namespace_id:
     type: string
     title: Existing tag namespace OCID

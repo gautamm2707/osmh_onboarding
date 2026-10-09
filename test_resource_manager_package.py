@@ -89,6 +89,8 @@ class ResourceManagerPackageTests(unittest.TestCase):
         self.assertIn("compartment_ocid:\n    type: string\n    visible: false", schema)
         self.assertIn("type: oci:core:instance:id", schema)
         self.assertIn("type: oci:kms:secret:id", schema)
+        self.assertIn("github_token_secret_compartment_ocid:\n    type: oci:identity:compartment:id", schema)
+        self.assertIn("compartmentId: ${github_token_secret_compartment_ocid}", schema)
         self.assertIn("region:\n    type: oci:identity:region:name", schema)
         self.assertIn("title: Region", schema)
         self.assertNotIn("session.region", schema)
@@ -108,6 +110,20 @@ class ResourceManagerPackageTests(unittest.TestCase):
         self.assertIn('resource "oci_identity_tag_default" "new_opt_in"', tags)
         self.assertIn('resource "oci_identity_tag_default" "existing_opt_in"', tags)
         self.assertGreaterEqual(tags.count('value             = "osmanagementhub"'), 2)
+        self.assertIn("local.existing_tag_defaults", tags)
+        self.assertNotIn("data.oci_identity_tag_defaults.existing_opt_in[0].tag_defaults) ==", tags)
+
+    def test_namespace_is_discovered_by_exact_name(self):
+        versions = (ROOT / "orm_versions.tf").read_text()
+        tags = (ROOT / "orm_tags_iam.tf").read_text()
+        self.assertIn("ns.name == var.tag_namespace", versions)
+        self.assertIn("reuse_tag_namespace", versions)
+        self.assertIn('resource "oci_identity_tag" "existing_missing"', tags)
+
+    def test_secret_is_validated_against_independent_compartment(self):
+        build = (ROOT / "orm_build.tf").read_text()
+        self.assertIn('data "oci_vault_secret" "github_token"', build)
+        self.assertIn("self.compartment_id == local.secret_compartment_id", build)
 
     def test_cloud_build_uses_supported_runner_and_repository_settings(self):
         build = (ROOT / "orm_build.tf").read_text()

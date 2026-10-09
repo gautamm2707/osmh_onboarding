@@ -1,6 +1,16 @@
 # OCI DevOps builds inside OCI and delivers through a resource principal.
 # Terraform stores only the existing Vault secret OCID. The preflight reads the
 # current token into process memory and never writes or prints it.
+data "oci_vault_secret" "github_token" {
+  count     = var.build_function_image ? 1 : 0
+  secret_id = var.github_token_secret_id
+  lifecycle {
+    postcondition {
+      condition     = self.compartment_id == local.secret_compartment_id && self.state == "ACTIVE"
+      error_message = "The GitHub token secret must be ACTIVE and belong to the selected secret compartment."
+    }
+  }
+}
 resource "oci_ons_notification_topic" "build" {
   count          = var.build_function_image ? 1 : 0
   depends_on     = [terraform_data.validate]
@@ -34,6 +44,7 @@ resource "oci_logging_log" "build" {
 }
 resource "oci_devops_connection" "github" {
   count           = var.build_function_image ? 1 : 0
+  depends_on      = [data.oci_vault_secret.github_token]
   project_id      = oci_devops_project.build[0].id
   connection_type = "GITHUB_ACCESS_TOKEN"
   access_token    = var.github_token_secret_id

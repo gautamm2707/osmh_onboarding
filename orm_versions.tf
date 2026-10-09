@@ -47,7 +47,11 @@ locals {
   suffix                = random_id.deployment.hex
   name                  = "osmh-rm-${local.suffix}-${var.region}"
   scope                 = local.target_compartment_id == var.tenancy_ocid ? "in tenancy" : "in compartment id ${local.target_compartment_id}"
-  namespace             = var.use_existing_tag_namespace ? var.tag_namespace : oci_identity_tag_namespace.opt_in[0].name
+  matching_namespaces   = [for ns in data.oci_identity_tag_namespaces.existing.tag_namespaces : ns if ns.name == var.tag_namespace && !ns.is_retired && ns.state == "ACTIVE"]
+  manual_namespaces     = [for ns in data.oci_identity_tag_namespaces.existing.tag_namespaces : ns if ns.id == var.existing_tag_namespace_id && ns.name == var.tag_namespace && !ns.is_retired && ns.state == "ACTIVE"]
+  reuse_tag_namespace   = var.use_existing_tag_namespace || length(local.matching_namespaces) == 1
+  existing_namespace_id = var.use_existing_tag_namespace ? var.existing_tag_namespace_id : try(one(local.matching_namespaces).id, "")
+  namespace             = local.reuse_tag_namespace ? var.tag_namespace : oci_identity_tag_namespace.opt_in[0].name
   new_namespace         = "${substr(var.tag_namespace, 0, 67)}_${local.suffix}"
   repository            = var.build_function_image ? oci_artifacts_container_repository.worker[0].display_name : try(regex("^[^/]+/[^/]+/(.+):[^:]+$", var.existing_image)[0], "invalid")
   image_tag             = "${substr(var.source_commit, 0, 12)}-${var.build_revision}"
@@ -58,7 +62,12 @@ locals {
   create_new_network    = local.create_application && var.create_network
   existing_subnets      = !local.create_application || var.create_network ? [] : (var.existing_subnet_id != "" ? [var.existing_subnet_id] : var.subnet_ids)
   selected_ids          = sort(distinct(var.selected_instance_ids))
-  tag_namespace_id      = var.use_existing_tag_namespace ? var.existing_tag_namespace_id : oci_identity_tag_namespace.opt_in[0].id
+  tag_namespace_id      = local.reuse_tag_namespace ? local.existing_namespace_id : oci_identity_tag_namespace.opt_in[0].id
+  existing_tag_matches  = local.reuse_tag_namespace ? [for tag in try(data.oci_identity_tags.existing[0].tags, []) : tag if tag.name == "managedby"] : []
+  reuse_tag_definition  = local.reuse_tag_namespace && length(local.existing_tag_matches) == 1
+  tag_definition_id     = local.reuse_tag_definition ? data.oci_identity_tag.existing[0].id : (local.reuse_tag_namespace ? oci_identity_tag.existing_missing[0].id : oci_identity_tag.opt_in[0].id)
+  existing_tag_defaults = local.reuse_tag_definition ? try(data.oci_identity_tag_defaults.existing_opt_in[0].tag_defaults, []) : []
+  secret_compartment_id = var.github_token_secret_compartment_ocid != "" ? var.github_token_secret_compartment_ocid : local.target_compartment_id
   schedule_parts        = split(":", var.schedule_time_utc)
   schedule_cron         = try("${tonumber(local.schedule_parts[1])} ${tonumber(local.schedule_parts[0])} * * *", "invalid")
   worker_condition      = "request.principal.type = 'fnfunc', request.principal.id = '${oci_functions_function.worker.id}'"
@@ -96,8 +105,12 @@ resource "terraform_data" "validate" {
       error_message = "Supply a versioned Linux AMD64 image from this tenancy's selected-region OCIR repository; latest is not accepted."
     }
     precondition {
-      condition     = !var.use_existing_tag_namespace || can(regex("^ocid1\\.tagnamespace\\.", var.existing_tag_namespace_id))
-      error_message = "Supply the existing namespace OCID when reusing a namespace."
+      condition     = length(local.matching_namespaces) <= 1
+      error_message = "More than one active tag namespace has the requested exact name; retire the duplicate before applying."
+    }
+    precondition {
+      condition     = !var.use_existing_tag_namespace || (can(regex("^ocid1\\.tagnamespace\\.", var.existing_tag_namespace_id)) && length(local.manual_namespaces) == 1)
+      error_message = "The requested existing namespace must be ACTIVE, visible in this tenancy, and match the supplied name and OCID."
     }
   }
 }

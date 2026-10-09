@@ -26,12 +26,18 @@ mock_provider "oci" {
   mock_data "oci_core_subnet" {
     defaults = { compartment_id = "ocid1.compartment.oc1..testscope", state = "AVAILABLE", availability_domain = "", vcn_id = "ocid1.vcn.oc1.iad.existing" }
   }
+  mock_data "oci_vault_secret" {
+    defaults = { compartment_id = "ocid1.compartment.oc1..testscope", state = "ACTIVE" }
+  }
 
 }
 mock_provider "oci" {
   alias = "home"
   mock_data "oci_identity_tag_namespaces" {
-    defaults = { tag_namespaces = [{ id = "ocid1.tagnamespace.oc1..existing", name = "OSMH", is_retired = false, state = "ACTIVE" }] }
+    defaults = { tag_namespaces = [] }
+  }
+  mock_data "oci_identity_tags" {
+    defaults = { tags = [{ id = "ocid1.tagdefinition.oc1..existing", name = "managedby", is_retired = false, state = "ACTIVE" }] }
   }
   mock_data "oci_identity_tag" {
     defaults = {
@@ -99,6 +105,23 @@ run "cloud_build_deployment" {
     error_message = "Image version must identify the source commit and build revision."
   }
 }
+run "cloud_build_secret_compartment_is_independent" {
+  command = plan
+  variables {
+    build_function_image                 = true
+    source_commit                        = "0123456789abcdef0123456789abcdef01234567"
+    github_token_secret_compartment_ocid = "ocid1.compartment.oc1..vaultscope"
+    github_token_secret_id               = "ocid1.vaultsecret.oc1.iad.test"
+  }
+  override_data {
+    target = data.oci_vault_secret.github_token[0]
+    values = { compartment_id = "ocid1.compartment.oc1..vaultscope", state = "ACTIVE" }
+  }
+  assert {
+    condition     = data.oci_vault_secret.github_token[0].compartment_id == "ocid1.compartment.oc1..vaultscope"
+    error_message = "The selected GitHub token secret compartment must be independent of the deployment compartment."
+  }
+}
 run "deploy_in_non_home_region" {
   command = plan
   variables {
@@ -135,13 +158,58 @@ run "reuse_namespace_without_owning_it" {
     use_existing_tag_namespace = true
     existing_tag_namespace_id  = "ocid1.tagnamespace.oc1..existing"
   }
+  override_data {
+    target = data.oci_identity_tag_namespaces.existing
+    values = { tag_namespaces = [{ id = "ocid1.tagnamespace.oc1..existing", name = "OSMH", is_retired = false, state = "ACTIVE" }] }
+  }
   assert {
-    condition     = length(oci_identity_tag_namespace.opt_in) == 0 && length(oci_identity_tag.opt_in) == 0
+    condition     = length(oci_identity_tag_namespace.opt_in) == 0 && length(oci_identity_tag.opt_in) == 0 && length(oci_identity_tag.existing_missing) == 0
     error_message = "Reused namespaces and keys must not be created or managed by this stack."
   }
   assert {
     condition     = length(oci_identity_tag_default.existing_opt_in) == 1 && length(oci_identity_tag_default.new_opt_in) == 0
     error_message = "Reuse mode must create a missing compartment tag default without taking ownership of the namespace or key."
+  }
+}
+run "automatically_reuse_namespace_with_same_name" {
+  command = plan
+  override_data {
+    target = data.oci_identity_tag_namespaces.existing
+    values = { tag_namespaces = [{ id = "ocid1.tagnamespace.oc1..existing", name = "OSMH", is_retired = false, state = "ACTIVE" }] }
+  }
+  assert {
+    condition     = length(oci_identity_tag_namespace.opt_in) == 0 && output.tag_namespace_id == "ocid1.tagnamespace.oc1..existing"
+    error_message = "An active exact-name namespace must be reused automatically."
+  }
+}
+run "automatically_create_missing_key_in_reused_namespace" {
+  command = plan
+  override_data {
+    target = data.oci_identity_tag_namespaces.existing
+    values = { tag_namespaces = [{ id = "ocid1.tagnamespace.oc1..existing", name = "OSMH", is_retired = false, state = "ACTIVE" }] }
+  }
+  override_data {
+    target = data.oci_identity_tags.existing[0]
+    values = { tags = [] }
+  }
+  assert {
+    condition     = length(oci_identity_tag.existing_missing) == 1 && length(oci_identity_tag_default.new_opt_in) == 1
+    error_message = "Automatic namespace reuse must create its missing managedby key and tag default."
+  }
+}
+run "reuse_existing_correct_tag_default" {
+  command = plan
+  override_data {
+    target = data.oci_identity_tag_namespaces.existing
+    values = { tag_namespaces = [{ id = "ocid1.tagnamespace.oc1..existing", name = "OSMH", is_retired = false, state = "ACTIVE" }] }
+  }
+  override_data {
+    target = data.oci_identity_tag_defaults.existing_opt_in[0]
+    values = { tag_defaults = [{ id = "ocid1.tagdefault.oc1..existing", value = "osmanagementhub" }] }
+  }
+  assert {
+    condition     = length(oci_identity_tag_default.new_opt_in) == 0 && length(oci_identity_tag_default.existing_opt_in) == 0 && output.tag_default_id == "ocid1.tagdefault.oc1..existing"
+    error_message = "An existing correct target-compartment tag default must be reused without another create."
   }
 }
 run "ignore_hidden_existing_network_when_creating_new" {

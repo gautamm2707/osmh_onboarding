@@ -1,7 +1,9 @@
-# Reused namespaces and keys are read-only. Do not let two states own the same tag.
+# Reuse existing namespaces and keys without importing them into this state. If
+# the namespace exists but managedby does not, this stack creates and protects
+# only the missing key.
 resource "oci_identity_tag_namespace" "opt_in" {
   provider       = oci.home
-  count          = var.use_existing_tag_namespace ? 0 : 1
+  count          = local.reuse_tag_namespace ? 0 : 1
   depends_on     = [terraform_data.validate]
   compartment_id = local.target_compartment_id
   name           = local.new_namespace
@@ -13,7 +15,7 @@ resource "oci_identity_tag_namespace" "opt_in" {
 }
 resource "oci_identity_tag" "opt_in" {
   provider         = oci.home
-  count            = var.use_existing_tag_namespace ? 0 : 1
+  count            = local.reuse_tag_namespace ? 0 : 1
   tag_namespace_id = oci_identity_tag_namespace.opt_in[0].id
   name             = "managedby"
   description      = "OSMH opt-in: osmanagementhub"
@@ -25,22 +27,19 @@ resource "oci_identity_tag" "opt_in" {
 }
 data "oci_identity_tag_namespaces" "existing" {
   provider                = oci.home
-  count                   = var.use_existing_tag_namespace ? 1 : 0
   compartment_id          = var.tenancy_ocid
   include_subcompartments = true
   state                   = "ACTIVE"
-  lifecycle {
-    postcondition {
-      condition     = length([for ns in self.tag_namespaces : ns.id if ns.id == var.existing_tag_namespace_id && ns.name == var.tag_namespace && !ns.is_retired && ns.state == "ACTIVE"]) == 1
-      error_message = "The existing namespace must be ACTIVE, visible in this tenancy, and match the supplied name and OCID."
-    }
-  }
+}
+data "oci_identity_tags" "existing" {
+  provider         = oci.home
+  count            = local.reuse_tag_namespace ? 1 : 0
+  tag_namespace_id = local.existing_namespace_id
 }
 data "oci_identity_tag" "existing" {
   provider         = oci.home
-  count            = var.use_existing_tag_namespace ? 1 : 0
-  tag_namespace_id = var.existing_tag_namespace_id
-  depends_on       = [data.oci_identity_tag_namespaces.existing]
+  count            = local.reuse_tag_definition ? 1 : 0
+  tag_namespace_id = local.existing_namespace_id
   tag_name         = "managedby"
   lifecycle {
     postcondition {
@@ -49,38 +48,50 @@ data "oci_identity_tag" "existing" {
     }
   }
 }
+resource "oci_identity_tag" "existing_missing" {
+  provider         = oci.home
+  count            = local.reuse_tag_namespace && !local.reuse_tag_definition ? 1 : 0
+  tag_namespace_id = local.existing_namespace_id
+  name             = "managedby"
+  description      = "OSMH opt-in: osmanagementhub"
+  validator {
+    validator_type = "ENUM"
+    values         = ["osmanagementhub"]
+  }
+  lifecycle { prevent_destroy = true }
+}
 
 # A tag default affects resources created after it becomes ACTIVE and is
 # inherited by child compartments. Existing instances are handled separately by
 # the initial all-instances invocation.
 data "oci_identity_tag_defaults" "existing_opt_in" {
   provider          = oci.home
-  count             = var.use_existing_tag_namespace ? 1 : 0
+  count             = local.reuse_tag_definition ? 1 : 0
   compartment_id    = local.target_compartment_id
-  tag_definition_id = data.oci_identity_tag.existing[0].id
+  tag_definition_id = local.tag_definition_id
   state             = "ACTIVE"
 }
 resource "oci_identity_tag_default" "new_opt_in" {
   provider          = oci.home
-  count             = var.use_existing_tag_namespace ? 0 : 1
+  count             = local.reuse_tag_definition ? 0 : 1
   compartment_id    = local.target_compartment_id
-  tag_definition_id = oci_identity_tag.opt_in[0].id
+  tag_definition_id = local.tag_definition_id
   value             = "osmanagementhub"
   is_required       = false
 }
 resource "oci_identity_tag_default" "existing_opt_in" {
   provider          = oci.home
-  count             = var.use_existing_tag_namespace && length(data.oci_identity_tag_defaults.existing_opt_in[0].tag_defaults) == 0 ? 1 : 0
+  count             = local.reuse_tag_definition && length(local.existing_tag_defaults) == 0 ? 1 : 0
   compartment_id    = local.target_compartment_id
-  tag_definition_id = data.oci_identity_tag.existing[0].id
+  tag_definition_id = local.tag_definition_id
   value             = "osmanagementhub"
   is_required       = false
 }
 resource "terraform_data" "validate_existing_tag_default" {
-  count = var.use_existing_tag_namespace && length(data.oci_identity_tag_defaults.existing_opt_in[0].tag_defaults) > 0 ? 1 : 0
+  count = local.reuse_tag_definition && length(local.existing_tag_defaults) > 0 ? 1 : 0
   lifecycle {
     precondition {
-      condition     = alltrue([for item in data.oci_identity_tag_defaults.existing_opt_in[0].tag_defaults : item.value == "osmanagementhub"])
+      condition     = alltrue([for item in local.existing_tag_defaults : item.value == "osmanagementhub"])
       error_message = "The selected compartment already has this tag default with another value; change it to osmanagementhub before applying this stack."
     }
   }
@@ -88,7 +99,7 @@ resource "terraform_data" "validate_existing_tag_default" {
 resource "oci_identity_dynamic_group" "instances" {
   provider       = oci.home
   count          = var.create_instance_iam ? 1 : 0
-  depends_on     = [terraform_data.validate, oci_identity_tag.opt_in, data.oci_identity_tag.existing]
+  depends_on     = [terraform_data.validate, oci_identity_tag.opt_in, data.oci_identity_tag.existing, oci_identity_tag.existing_missing]
   compartment_id = var.tenancy_ocid
   name           = "${local.name}-instances"
   lifecycle { ignore_changes = [name] }

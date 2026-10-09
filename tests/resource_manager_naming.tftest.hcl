@@ -7,8 +7,16 @@ mock_provider "oci" {
     }
   }
   mock_data "oci_objectstorage_namespace" { defaults = { namespace = "testnamespace" } }
+  mock_data "oci_vault_secret" {
+    defaults = { compartment_id = "ocid1.compartment.oc1..testscope", state = "ACTIVE" }
+  }
 }
-mock_provider "oci" { alias = "home" }
+mock_provider "oci" {
+  alias = "home"
+  mock_data "oci_identity_tag_namespaces" {
+    defaults = { tag_namespaces = [] }
+  }
+}
 
 variables {
   tenancy_ocid           = "ocid1.tenancy.oc1..testtenancy"
