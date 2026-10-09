@@ -73,7 +73,7 @@ variables:
     visible: false
   source_commit:
     type: string
-    default: 18fa39fa959be7a337e49135b5c17622ab84d9e2
+    default: fa608e009ec575c277a268a25975db3eef7b3282
     visible: false
   github_token_secret_id:
     type: oci:kms:secret:id
