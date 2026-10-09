@@ -58,7 +58,7 @@ variable "source_branch" {
 }
 variable "source_commit" {
   type        = string
-  default     = "9186995651c65ae846e67b6037f0d68e87d03a27"
+  default     = "987054544fc880e56c4f6dcda68fd5201dd7d6ad"
   description = "Published 40-character commit SHA containing function/Dockerfile and build_spec.yaml. The Resource Manager form pins and hides this value."
 }
 variable "github_token_secret_id" {
