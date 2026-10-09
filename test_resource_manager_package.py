@@ -112,6 +112,10 @@ class ResourceManagerPackageTests(unittest.TestCase):
         self.assertGreaterEqual(tags.count('value             = "osmanagementhub"'), 2)
         self.assertIn("local.existing_tag_defaults", tags)
         self.assertNotIn("data.oci_identity_tag_defaults.existing_opt_in[0].tag_defaults) ==", tags)
+        query = tags.split('data "oci_identity_tag_defaults" "existing_opt_in"', 1)[1].split("}\n", 1)[0]
+        self.assertIn("compartment_id", query)
+        self.assertNotIn("tag_definition_id", query)
+        self.assertIn("item.tag_definition_id == local.tag_definition_id", (ROOT / "orm_versions.tf").read_text())
 
     def test_namespace_is_discovered_by_exact_name(self):
         versions = (ROOT / "orm_versions.tf").read_text()

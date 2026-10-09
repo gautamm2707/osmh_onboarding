@@ -11,7 +11,7 @@ output "tag_namespace_id" {
   value = local.tag_namespace_id
 }
 output "tag_default_id" {
-  value = try(oci_identity_tag_default.new_opt_in[0].id, oci_identity_tag_default.existing_opt_in[0].id, data.oci_identity_tag_defaults.existing_opt_in[0].tag_defaults[0].id, null)
+  value = try(oci_identity_tag_default.new_opt_in[0].id, oci_identity_tag_default.existing_opt_in[0].id, local.existing_tag_defaults[0].id, null)
 }
 output "instance_opt_in_tag" { value = "${local.namespace}.managedby=osmanagementhub" }
 output "deployment_id" {

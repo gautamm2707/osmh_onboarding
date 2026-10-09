@@ -75,7 +75,7 @@ Fields named `auth` (default `APIKey`), `bootstrap_iam`, `compartment_id`, and `
 To load the updated form in the Create stack wizard:
 
 1. For the published package, cancel the uncreated wizard and open **Onboard in OSMH** again. To upload a local copy instead, select **Previous** to return to **Stack information**.
-2. Under configuration source, select **My configuration → .Zip file** and replace the old source with **`osmh-resource-manager-console-v1.15.zip`** from the project folder. This is a visible copy of the generated `.deployment/osmh-resource-manager.zip`.
+2. Under configuration source, select **My configuration → .Zip file** and replace the old source with **`osmh-resource-manager-console-v1.16.zip`** from the project folder. This is a visible copy of the generated `.deployment/osmh-resource-manager.zip`.
 3. If a working directory is requested, use the ZIP root (empty/default). The ZIP has `schema.yaml` and `orm_*.tf` directly at its root and excludes `deployment/`.
 4. Select **Next**. The first group should be **Compartment and Compute selection**, with **Deployment and onboarding compartment**, **Onboard all eligible instances**, and the conditional dropdown-list control for individual Compute instances.
 5. If the wizard retains the previous source, cancel the uncreated stack and start a new Create stack wizard with this ZIP.
@@ -155,7 +155,9 @@ Version **1.14** adds authorized bulk onboarding across the target compartment t
 
 Version **1.15** fixes the tag-default plan path so disabled reuse never indexes an absent data source. It also reuses active tag namespaces by exact name, creates a missing compatible `managedby` key, reuses an existing correct compartment tag default, and adds an independent Vault-secret compartment picker with an ACTIVE/compartment validation.
 
-For an existing or partially created stack, **Edit stack → replace the configuration ZIP with v1.15 → retain the same variables, select the Vault secret compartment, then Plan**. Review namespace reuse and tag-default additions before Apply. Generated `name`/`display_name` fields are assigned only at resource creation: narrowly scoped `ignore_changes` rules preserve names already in state. Image URIs, IAM and tagging use the actual stored repository/namespace names. The v1.9 state moves preserve the existing build dynamic group and policy while splitting connection access. No namespace migration, import or manual state edit is required for resources already recorded in that stack.
+Version **1.16** fixes the OCI tag-default lookup introduced in v1.15. OCI accepts exactly one primary list filter, so the stack now queries active defaults by target compartment and filters the result by tag-definition OCID inside Terraform.
+
+For an existing or partially created stack, **Edit stack → replace the configuration ZIP with v1.16 → retain the same variables, select the Vault secret compartment, then Plan**. Review namespace reuse and tag-default additions before Apply. Generated `name`/`display_name` fields are assigned only at resource creation: narrowly scoped `ignore_changes` rules preserve names already in state. Image URIs, IAM and tagging use the actual stored repository/namespace names. The v1.9 state moves preserve the existing build dynamic group and policy while splitting connection access. No namespace migration, import or manual state edit is required for resources already recorded in that stack.
 
 Keep the original stack and state for retries. Changing to a new stack does not transfer ownership of an old stack's resources or clean up orphans. The package does not silently adopt or delete objects belonging to another state. Generated names remain fixed on later updates; changing the namespace prefix does not rename an existing managed namespace. Intentional replacements or state loss require a separate recovery plan, particularly for retained DevOps projects and protected tag namespaces.
 

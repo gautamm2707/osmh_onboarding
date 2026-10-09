@@ -65,11 +65,10 @@ resource "oci_identity_tag" "existing_missing" {
 # inherited by child compartments. Existing instances are handled separately by
 # the initial all-instances invocation.
 data "oci_identity_tag_defaults" "existing_opt_in" {
-  provider          = oci.home
-  count             = local.reuse_tag_definition ? 1 : 0
-  compartment_id    = local.target_compartment_id
-  tag_definition_id = local.tag_definition_id
-  state             = "ACTIVE"
+  provider       = oci.home
+  count          = local.reuse_tag_definition ? 1 : 0
+  compartment_id = local.target_compartment_id
+  state          = "ACTIVE"
 }
 resource "oci_identity_tag_default" "new_opt_in" {
   provider          = oci.home

@@ -205,7 +205,12 @@ run "reuse_existing_correct_tag_default" {
   }
   override_data {
     target = data.oci_identity_tag_defaults.existing_opt_in[0]
-    values = { tag_defaults = [{ id = "ocid1.tagdefault.oc1..existing", value = "osmanagementhub" }] }
+    values = {
+      tag_defaults = [
+        { id = "ocid1.tagdefault.oc1..other", tag_definition_id = "ocid1.tagdefinition.oc1..other", value = "other" },
+        { id = "ocid1.tagdefault.oc1..existing", tag_definition_id = "ocid1.tagdefinition.oc1..existing", value = "osmanagementhub" }
+      ]
+    }
   }
   assert {
     condition     = length(oci_identity_tag_default.new_opt_in) == 0 && length(oci_identity_tag_default.existing_opt_in) == 0 && output.tag_default_id == "ocid1.tagdefault.oc1..existing"

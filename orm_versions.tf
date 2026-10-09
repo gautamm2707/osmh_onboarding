@@ -66,7 +66,7 @@ locals {
   existing_tag_matches  = local.reuse_tag_namespace ? [for tag in try(data.oci_identity_tags.existing[0].tags, []) : tag if tag.name == "managedby"] : []
   reuse_tag_definition  = local.reuse_tag_namespace && length(local.existing_tag_matches) == 1
   tag_definition_id     = local.reuse_tag_definition ? data.oci_identity_tag.existing[0].id : (local.reuse_tag_namespace ? oci_identity_tag.existing_missing[0].id : oci_identity_tag.opt_in[0].id)
-  existing_tag_defaults = local.reuse_tag_definition ? try(data.oci_identity_tag_defaults.existing_opt_in[0].tag_defaults, []) : []
+  existing_tag_defaults = local.reuse_tag_definition ? [for item in try(data.oci_identity_tag_defaults.existing_opt_in[0].tag_defaults, []) : item if item.tag_definition_id == local.tag_definition_id] : []
   secret_compartment_id = var.github_token_secret_compartment_ocid != "" ? var.github_token_secret_compartment_ocid : local.target_compartment_id
   schedule_parts        = split(":", var.schedule_time_utc)
   schedule_cron         = try("${tonumber(local.schedule_parts[1])} ${tonumber(local.schedule_parts[0])} * * *", "invalid")
