@@ -32,6 +32,24 @@ def service_log(identifier="ocid1.log.oc1.iad.existing", name="existing"):
 
 
 class EnsureServiceLogsTests(unittest.TestCase):
+    def test_response_items_accepts_prefixed_json(self):
+        result = subprocess.CompletedProcess([], 0, 'NOTICE: initializing\n{"data": [{"id": "one"}]}\nDone', "")
+        self.assertEqual(logs.response_items(result, "list logs"), [{"id": "one"}])
+
+    def test_response_items_accepts_items_envelope(self):
+        result = subprocess.CompletedProcess([], 0, json.dumps({"data": {"items": [{"id": "one"}]}}), "")
+        self.assertEqual(logs.response_items(result, "list logs"), [{"id": "one"}])
+
+    @patch.object(logs.time, "sleep")
+    @patch.object(logs, "run_oci")
+    def test_list_items_retries_invalid_success_response(self, run_oci, sleep):
+        run_oci.side_effect = [
+            subprocess.CompletedProcess([], 0, "", ""),
+            subprocess.CompletedProcess([], 0, json.dumps({"data": [{"id": "one"}]}), ""),
+        ]
+        self.assertEqual(logs.list_items(["logging", "log", "list"], "region", "list logs"), [{"id": "one"}])
+        sleep.assert_called_once_with(2)
+
     @patch.object(logs, "run_oci")
     @patch.object(logs, "all_logs")
     def test_existing_service_combination_is_reused_without_create(self, all_logs, run_oci):

@@ -10,28 +10,76 @@ import time
 from validate_build_connection import ValidationError, oci_error_summary, run_oci
 
 
+def json_response(output: str) -> dict:
+    """Decode OCI JSON even when the CLI emits a harmless prefix or suffix."""
+    stripped = output.strip()
+    if not stripped:
+        raise ValueError("empty response")
+    try:
+        value = json.loads(stripped)
+        if isinstance(value, dict):
+            return value
+    except json.JSONDecodeError:
+        pass
+
+    decoder = json.JSONDecoder()
+    for index, character in enumerate(output):
+        if character != "{":
+            continue
+        try:
+            value, _ = decoder.raw_decode(output[index:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict) and "data" in value:
+            return value
+    raise ValueError("no OCI JSON object")
+
+
 def response_items(result, action: str) -> list[dict]:
     if result.returncode:
         raise ValidationError(f"OCI Logging could not {action}: {oci_error_summary(result.stderr or result.stdout)}")
     try:
-        data = json.loads(result.stdout).get("data", [])
-    except json.JSONDecodeError as error:
+        data = json_response(result.stdout).get("data", [])
+    except ValueError as error:
         raise ValidationError(f"OCI Logging returned an invalid response while attempting to {action}.") from error
+    if isinstance(data, dict):
+        data = data.get("items", [])
     if not isinstance(data, list):
         raise ValidationError(f"OCI Logging returned an invalid item list while attempting to {action}.")
     return data
 
 
+def list_items(arguments: list[str], region: str, action: str) -> list[dict]:
+    """Retry successful-but-incomplete list responses during OCI propagation."""
+    delays = (2, 4, 8, 16)
+    for attempt in range(len(delays) + 1):
+        result = run_oci(arguments, region)
+        try:
+            return response_items(result, action)
+        except ValidationError:
+            if result.returncode or attempt == len(delays):
+                raise
+            delay = delays[attempt]
+            print(
+                f"OCI Logging list response is not ready (attempt {attempt + 1}); retrying in {delay}s.",
+                flush=True,
+            )
+            time.sleep(delay)
+    raise AssertionError("unreachable")
+
+
 def list_log_groups(compartment_id: str, region: str) -> list[dict]:
-    return response_items(
-        run_oci(["logging", "log-group", "list", "--compartment-id", compartment_id, "--all"], region),
+    return list_items(
+        ["logging", "log-group", "list", "--compartment-id", compartment_id, "--all"],
+        region,
         "list log groups",
     )
 
 
 def list_logs(log_group_id: str, region: str) -> list[dict]:
-    return response_items(
-        run_oci(["logging", "log", "list", "--log-group-id", log_group_id, "--all"], region),
+    return list_items(
+        ["logging", "log", "list", "--log-group-id", log_group_id, "--all"],
+        region,
         f"list logs in {log_group_id}",
     )
 

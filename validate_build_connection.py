@@ -55,8 +55,18 @@ def oci_error_summary(output: str) -> str:
 def run_oci(arguments: list[str], region: str) -> subprocess.CompletedProcess[str]:
     if shutil.which("oci") is None:
         raise ValidationError("OCI CLI is unavailable in the Resource Manager worker.")
+    output_arguments = [] if "--output" in arguments else ["--output", "json"]
     return subprocess.run(
-        ["oci", *arguments, "--auth", "instance_obo_user", "--region", region, "--no-retry"],
+        [
+            "oci",
+            *arguments,
+            *output_arguments,
+            "--auth",
+            "instance_obo_user",
+            "--region",
+            region,
+            "--no-retry",
+        ],
         capture_output=True,
         text=True,
         check=False,

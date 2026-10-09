@@ -2,9 +2,11 @@
 import tempfile
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 import zipfile
 from urllib.parse import parse_qs, urlsplit
 
+import validate_build_connection as build_validation
 from package_resource_manager import PACKAGE_FILES, ROOT, deploy_url, package
 from run_devops_build import retryable
 from validate_build_connection import ValidationError, oci_error_summary, repository_coordinates
@@ -75,6 +77,13 @@ class ResourceManagerPackageTests(unittest.TestCase):
             oci_error_summary(output),
             "InternalError: Unable to validate: request request-id",
         )
+
+    @patch.object(build_validation.subprocess, "run")
+    @patch.object(build_validation.shutil, "which", return_value="/usr/bin/oci")
+    def test_oci_commands_request_json_output(self, _which, run):
+        build_validation.run_oci(["logging", "log", "list"], "us-ashburn-1")
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("--output") + 1], "json")
 
     def test_build_retry_only_handles_source_iam_failures(self):
         self.assertTrue(retryable("Error fetching secret variable from vault"))
