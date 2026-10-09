@@ -94,6 +94,7 @@ resource "oci_identity_policy" "build_pipeline" {
     # OCI's RelatedResourceNotAuthorizedOrNotFound guidance requires the
     # build-pipeline principal to manage devops-family at tenancy scope.
     "Allow dynamic-group id ${oci_identity_dynamic_group.build_pipeline[0].id} to manage devops-family in tenancy",
+    "Allow dynamic-group id ${oci_identity_dynamic_group.build_pipeline[0].id} to read secret-family in tenancy",
     "Allow dynamic-group id ${oci_identity_dynamic_group.build_pipeline[0].id} to use ons-topics ${local.scope}",
     "Allow dynamic-group id ${oci_identity_dynamic_group.build_pipeline[0].id} to manage repos ${local.scope}"
   ]
@@ -181,27 +182,27 @@ resource "terraform_data" "build_iam" {
     connection_policy     = sha256(jsonencode(oci_identity_policy.connection[0].statements))
   }
 }
-resource "terraform_data" "build_version" {
-  count = var.build_function_image ? 1 : 0
-  input = {
+resource "terraform_data" "build_run" {
+  count      = var.build_function_image ? 1 : 0
+  depends_on = [terraform_data.build_iam, oci_devops_build_pipeline_stage.deliver, oci_logging_log.build]
+  triggers_replace = {
+    pipeline   = oci_devops_build_pipeline.image[0].id
     commit     = var.source_commit
     revision   = var.build_revision
     repository = var.source_repository_url
     branch     = var.source_branch
+    image      = local.built_image
   }
-}
-resource "oci_devops_build_run" "image" {
-  count             = var.build_function_image ? 1 : 0
-  depends_on        = [terraform_data.build_iam, oci_devops_build_pipeline_stage.deliver, oci_logging_log.build]
-  build_pipeline_id = oci_devops_build_pipeline.image[0].id
-  display_name      = "osmh-${local.image_tag}"
-  commit_info {
-    commit_hash       = var.source_commit
-    repository_branch = var.source_branch
-    repository_url    = var.source_repository_url
-  }
-  timeouts { create = "60m" }
-  lifecycle {
-    replace_triggered_by = [terraform_data.build_version[0]]
+  provisioner "local-exec" {
+    command = "python3 \"${path.module}/run_devops_build.py\" --pipeline-id \"$OSMH_PIPELINE_ID\" --display-name \"$OSMH_BUILD_NAME\" --repository-url \"$OSMH_REPOSITORY_URL\" --branch \"$OSMH_SOURCE_BRANCH\" --commit \"$OSMH_SOURCE_COMMIT\" --region \"$OSMH_REGION\" --timeout-seconds \"$OSMH_TIMEOUT_SECONDS\""
+    environment = {
+      OSMH_PIPELINE_ID     = oci_devops_build_pipeline.image[0].id
+      OSMH_BUILD_NAME      = "osmh-${local.image_tag}"
+      OSMH_REPOSITORY_URL  = var.source_repository_url
+      OSMH_SOURCE_BRANCH   = var.source_branch
+      OSMH_SOURCE_COMMIT   = var.source_commit
+      OSMH_REGION          = var.region
+      OSMH_TIMEOUT_SECONDS = tostring(var.build_timeout_seconds)
+    }
   }
 }

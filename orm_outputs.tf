@@ -3,7 +3,10 @@ output "schedule_id" { value = oci_resource_scheduler_schedule.nightly.id }
 output "function_image" { value = local.image }
 output "log_group_id" { value = oci_logging_log_group.worker.id }
 output "build_pipeline_id" { value = try(oci_devops_build_pipeline.image[0].id, null) }
-output "build_run_id" { value = try(oci_devops_build_run.image[0].id, null) }
+output "build_run_id" {
+  description = "Terraform build execution checkpoint. OCI DevOps build run OCIDs are printed in the Apply log."
+  value       = try(terraform_data.build_run[0].id, null)
+}
 output "tag_namespace_id" {
   value = local.tag_namespace_id
 }

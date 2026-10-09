@@ -6,6 +6,7 @@ import zipfile
 from urllib.parse import parse_qs, urlsplit
 
 from package_resource_manager import PACKAGE_FILES, ROOT, deploy_url, package
+from run_devops_build import retryable
 from validate_build_connection import ValidationError, oci_error_summary, repository_coordinates
 
 
@@ -75,6 +76,11 @@ class ResourceManagerPackageTests(unittest.TestCase):
             "InternalError: Unable to validate: request request-id",
         )
 
+    def test_build_retry_only_handles_source_iam_failures(self):
+        self.assertTrue(retryable("Error fetching secret variable from vault"))
+        self.assertTrue(retryable("Unable to fetch build_spec due to RelatedResourceNotAuthorizedOrNotFound"))
+        self.assertFalse(retryable("Container build command failed"))
+
     def test_console_schema_uses_dynamic_compute_list_and_managed_auth(self):
         schema = (ROOT / "schema.yaml").read_text()
         self.assertIn("type: list\n    valueType: selected_instance_id", schema)
@@ -99,6 +105,7 @@ class ResourceManagerPackageTests(unittest.TestCase):
         self.assertIn("resource.type = 'devopsbuildpipeline'", build)
         self.assertIn("resource.type = 'devopsconnection'", build)
         self.assertIn('to read secret-family in tenancy', build)
+        self.assertGreaterEqual(build.count('to read secret-family in tenancy'), 2)
         self.assertIn('to manage devops-family in tenancy', build)
         self.assertIn('to manage repos ${local.scope}', build)
         self.assertIn("from = oci_identity_dynamic_group.build[0]", build)
@@ -122,8 +129,13 @@ class ResourceManagerPackageTests(unittest.TestCase):
         self.assertIn("validation_run        = plantimestamp()", build)
         self.assertNotIn('command = "sleep ${var.iam_wait_seconds}"', build)
         self.assertIn("validate_build_connection.py", PACKAGE_FILES)
+        self.assertIn("run_devops_build.py", PACKAGE_FILES)
+        self.assertIn('resource "terraform_data" "build_run"', build)
+        self.assertNotIn('resource "oci_devops_build_run" "image"', build)
         self.assertIn('variable "runtime_iam_wait_seconds"', variables)
         self.assertIn("default     = 120", variables)
+        self.assertIn('variable "build_timeout_seconds"', variables)
+        self.assertIn("default     = 7200", variables)
         runtime = (ROOT / "orm_runtime.tf").read_text()
         self.assertIn('command = "sleep ${var.runtime_iam_wait_seconds}"', runtime)
 

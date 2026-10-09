@@ -10,7 +10,7 @@ resource "oci_functions_application" "worker" {
 }
 
 resource "oci_functions_function" "worker" {
-  depends_on     = [terraform_data.validate, data.oci_functions_application.existing, oci_identity_policy.image_access, oci_devops_build_run.image, data.oci_core_instance.selected]
+  depends_on     = [terraform_data.validate, data.oci_functions_application.existing, oci_identity_policy.image_access, terraform_data.build_run, data.oci_core_instance.selected]
   application_id = local.application_id
   display_name   = "onboard-tagged-instances-${local.suffix}"
   lifecycle { ignore_changes = [display_name] }

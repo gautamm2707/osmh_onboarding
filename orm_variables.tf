@@ -164,6 +164,16 @@ variable "runtime_iam_wait_seconds" {
   }
 }
 
+variable "build_timeout_seconds" {
+  type        = number
+  default     = 7200
+  description = "Maximum total time for OCI DevOps build attempts, including retries for transient source and IAM propagation failures."
+  validation {
+    condition     = var.build_timeout_seconds >= 1800 && var.build_timeout_seconds <= 10800 && floor(var.build_timeout_seconds) == var.build_timeout_seconds
+    error_message = "Use an integer from 1800 to 10800 seconds."
+  }
+}
+
 variable "selected_instance_ids" {
   type        = list(string)
   default     = []

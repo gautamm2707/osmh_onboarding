@@ -53,7 +53,7 @@ variables {
 run "existing_image_deployment" {
   command = plan
   assert {
-    condition     = length(oci_devops_build_run.image) == 0 && length(oci_devops_connection.github) == 0
+    condition     = length(terraform_data.build_run) == 0 && length(oci_devops_connection.github) == 0
     error_message = "Existing-image mode must not create builds or GitHub connections."
   }
   assert {
@@ -83,7 +83,7 @@ run "cloud_build_deployment" {
     github_token_secret_id = "ocid1.vaultsecret.oc1.iad.test"
   }
   assert {
-    condition     = length(oci_devops_build_run.image) == 1 && oci_artifacts_container_repository.worker[0].is_public == false && oci_devops_build_pipeline_stage.build[0].image == "OL8_X86_64_STANDARD_10"
+    condition     = length(terraform_data.build_run) == 1 && oci_artifacts_container_repository.worker[0].is_public == false && oci_devops_build_pipeline_stage.build[0].image == "OL8_X86_64_STANDARD_10"
     error_message = "Cloud building must create one OL8 build and a private image repository."
   }
   assert {
