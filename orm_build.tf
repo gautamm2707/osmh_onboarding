@@ -25,6 +25,25 @@ resource "oci_devops_project" "build" {
   lifecycle { ignore_changes = [name] }
   notification_config { topic_id = oci_ons_notification_topic.build[0].id }
 }
+# Retain the former state address at count zero for Terraform 1.5 upgrades.
+# terraform_data.service_logs runs after any state-owned legacy log is removed.
+resource "oci_logging_log" "build" {
+  count              = 0
+  display_name       = "devops-builds"
+  log_group_id       = oci_logging_log_group.worker.id
+  log_type           = "SERVICE"
+  is_enabled         = true
+  retention_duration = 30
+  configuration {
+    compartment_id = local.target_compartment_id
+    source {
+      category    = "all"
+      resource    = var.build_function_image ? oci_devops_project.build[0].id : ""
+      service     = "devops"
+      source_type = "OCISERVICE"
+    }
+  }
+}
 resource "oci_devops_connection" "github" {
   count           = var.build_function_image ? 1 : 0
   depends_on      = [data.oci_vault_secret.github_token]

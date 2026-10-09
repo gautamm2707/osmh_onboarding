@@ -131,10 +131,12 @@ class ResourceManagerPackageTests(unittest.TestCase):
 
     def test_service_logs_are_reconciled_instead_of_blindly_created(self):
         runtime = (ROOT / "orm_runtime.tf").read_text()
+        build = (ROOT / "orm_build.tf").read_text()
         self.assertIn('resource "terraform_data" "service_logs"', runtime)
-        self.assertIn('removed {\n  from = oci_logging_log.worker', runtime)
-        self.assertIn('removed {\n  from = oci_logging_log.build', runtime)
-        self.assertNotIn('resource "oci_logging_log"', runtime + (ROOT / "orm_build.tf").read_text())
+        self.assertNotIn("removed {", runtime + build)
+        self.assertIn('resource "oci_logging_log" "worker" {\n  count', runtime)
+        self.assertIn('resource "oci_logging_log" "build" {\n  count', build)
+        self.assertGreaterEqual((runtime + build).count("count              = 0"), 2)
         self.assertIn("ensure_service_logs.py", PACKAGE_FILES)
 
     def test_cloud_build_uses_supported_runner_and_repository_settings(self):

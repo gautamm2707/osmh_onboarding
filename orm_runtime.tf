@@ -94,18 +94,30 @@ resource "oci_logging_log_group" "worker" {
   lifecycle { ignore_changes = [display_name] }
 }
 
-removed {
-  from = oci_logging_log.worker
-  lifecycle { destroy = false }
-}
-
-removed {
-  from = oci_logging_log.build
-  lifecycle { destroy = false }
+# Terraform 1.5 in OCI Resource Manager does not support removed blocks. Keep
+# the old address at count zero so an upgraded stack deletes its state-owned
+# log before the idempotent reconciler runs. Orphaned logs are discovered and
+# reused by the reconciler.
+resource "oci_logging_log" "worker" {
+  count              = 0
+  display_name       = "function-invocations"
+  log_group_id       = oci_logging_log_group.worker.id
+  log_type           = "SERVICE"
+  is_enabled         = true
+  retention_duration = 30
+  configuration {
+    compartment_id = local.target_compartment_id
+    source {
+      category    = "invoke"
+      resource    = local.application_id
+      service     = "functions"
+      source_type = "OCISERVICE"
+    }
+  }
 }
 
 resource "terraform_data" "service_logs" {
-  depends_on = [oci_logging_log_group.worker, oci_functions_application.worker, data.oci_functions_application.existing, oci_devops_project.build]
+  depends_on = [oci_logging_log.worker, oci_logging_log.build, oci_logging_log_group.worker, oci_functions_application.worker, data.oci_functions_application.existing, oci_devops_project.build]
   input = {
     compartment_id          = local.target_compartment_id
     log_group_id            = oci_logging_log_group.worker.id
