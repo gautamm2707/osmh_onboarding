@@ -50,8 +50,8 @@ def response_items(result, action: str) -> list[dict]:
 
 
 def list_items(arguments: list[str], region: str, action: str) -> list[dict]:
-    """Retry successful-but-incomplete list responses during OCI propagation."""
-    delays = (2, 4, 8, 16)
+    """Retry a successful-but-incomplete list response once."""
+    delays = (2,)
     for attempt in range(len(delays) + 1):
         result = run_oci(arguments, region)
         try:
@@ -126,24 +126,46 @@ def unique_name(base: str, occupied: set[str]) -> str:
     raise ValidationError(f"OCI Logging has too many logs using the {base} name family.")
 
 
-def ensure_log(args, service: str, resource: str, category: str, name: str) -> str:
-    logs = all_logs(args.compartment_id, args.region)
-    matches = [item for item in logs if matches_service(item, service, resource, category)]
-    if len(matches) > 1:
-        raise ValidationError(
-            f"OCI Logging returned multiple logs for ({service}, {resource}, {category}); remove the duplicate service log."
-        )
-    if matches:
-        existing = matches[0]
-        print(
-            f"Reusing OCI service log {existing.get('id')} in log group "
-            f"{existing.get('log-group-id') or existing.get('log_group_id')} for {service}/{category}.",
-            flush=True,
-        )
-        return str(existing.get("id"))
+def ensure_log(
+    args,
+    service: str,
+    resource: str,
+    category: str,
+    name: str,
+    discovered_logs: list[dict] | None,
+) -> str:
+    if discovered_logs is not None:
+        matches = [item for item in discovered_logs if matches_service(item, service, resource, category)]
+        if matches:
+            existing = matches[0]
+            if len(matches) > 1:
+                print(
+                    f"WARNING: OCI Logging returned multiple logs for {service}/{category}; "
+                    f"reusing {existing.get('id')} and continuing.",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"Reusing OCI service log {existing.get('id')} in log group "
+                    f"{existing.get('log-group-id') or existing.get('log_group_id')} for {service}/{category}.",
+                    flush=True,
+                )
+            return str(existing.get("id"))
 
-    target_logs = list_logs(args.log_group_id, args.region)
-    display_name = unique_name(name, {str(item.get("display-name") or item.get("display_name")) for item in target_logs})
+        target_logs = [
+            item
+            for item in discovered_logs
+            if (item.get("log-group-id") or item.get("log_group_id")) == args.log_group_id
+        ]
+        display_name = unique_name(
+            name,
+            {str(item.get("display-name") or item.get("display_name")) for item in target_logs},
+        )
+    else:
+        # The deployment id makes this name unique to the stack. If a previous
+        # attempt already created it, OCI returns 409 and we continue below.
+        display_name = name
+
     configuration = json.dumps(
         {
             "compartmentId": args.compartment_id,
@@ -176,22 +198,33 @@ def ensure_log(args, service: str, resource: str, category: str, name: str) -> s
         args.region,
     )
     if result.returncode:
-        # A concurrent retry may have won the create race. Re-list before
-        # treating OCI's duplicate response as a deployment failure.
-        matches = [item for item in all_logs(args.compartment_id, args.region) if matches_service(item, service, resource, category)]
-        if len(matches) == 1:
-            print(f"Reusing concurrently created OCI service log {matches[0].get('id')}.", flush=True)
-            return str(matches[0].get("id"))
-        raise ValidationError(f"OCI Logging could not create {service}/{category}: {oci_error_summary(result.stderr or result.stdout)}")
+        output = result.stderr or result.stdout
+        if "409" in output or "conflict" in output.casefold():
+            print(
+                f"OCI service logging is already configured for {service}/{category}; continuing.",
+                flush=True,
+            )
+            return "existing"
+        raise ValidationError(f"OCI Logging could not create {service}/{category}: {oci_error_summary(output)}")
 
-    deadline = time.monotonic() + 120
-    while time.monotonic() < deadline:
-        matches = [item for item in all_logs(args.compartment_id, args.region) if matches_service(item, service, resource, category)]
-        if len(matches) == 1:
-            print(f"Created OCI service log {matches[0].get('id')} as {display_name}.", flush=True)
-            return str(matches[0].get("id"))
-        time.sleep(5)
-    raise ValidationError(f"OCI Logging accepted {service}/{category}, but the new log did not become visible.")
+    print(f"Requested OCI service log {display_name} for {service}/{category}.", flush=True)
+    return "created"
+
+
+def ensure_log_nonblocking(
+    args,
+    service: str,
+    resource: str,
+    category: str,
+    name: str,
+    discovered_logs: list[dict] | None,
+) -> str:
+    """Keep optional observability failures from blocking core deployment."""
+    try:
+        return ensure_log(args, service, resource, category, name, discovered_logs)
+    except ValidationError as error:
+        print(f"WARNING: {error} Continuing without this optional service log.", flush=True)
+        return "skipped"
 
 
 def cleanup(args) -> None:
@@ -201,7 +234,12 @@ def cleanup(args) -> None:
         f"osmh-{args.deployment_id}-function-invocations",
         f"osmh-{args.deployment_id}-devops-builds",
     }
-    for log in list_logs(args.log_group_id, args.region):
+    try:
+        logs = list_logs(args.log_group_id, args.region)
+    except ValidationError as error:
+        print(f"WARNING: {error} Skipping optional service-log cleanup.", flush=True)
+        return
+    for log in logs:
         tags = log.get("freeform-tags") or log.get("freeform_tags") or {}
         name = str(log.get("display-name") or log.get("display_name") or "")
         if tags.get("osmhDeployment") != args.deployment_id and name not in owned_names:
@@ -218,7 +256,11 @@ def cleanup(args) -> None:
             args.region,
         )
         if result.returncode and "NotAuthorizedOrNotFound" not in (result.stderr or result.stdout):
-            raise ValidationError(f"OCI Logging could not delete {log.get('id')}: {oci_error_summary(result.stderr or result.stdout)}")
+            print(
+                f"WARNING: OCI Logging could not delete {log.get('id')}: "
+                f"{oci_error_summary(result.stderr or result.stdout)}. Continuing cleanup.",
+                flush=True,
+            )
 
 
 def main() -> int:
@@ -240,20 +282,30 @@ def main() -> int:
         else:
             if not args.function_application_id:
                 raise ValidationError("The Function application OCID is required to configure service logging.")
-            ensure_log(
+            try:
+                discovered_logs = all_logs(args.compartment_id, args.region)
+            except ValidationError as error:
+                discovered_logs = None
+                print(
+                    f"WARNING: {error} Falling back to idempotent service-log creation.",
+                    flush=True,
+                )
+            ensure_log_nonblocking(
                 args,
                 "functions",
                 args.function_application_id,
                 "invoke",
                 f"osmh-{args.deployment_id}-function-invocations",
+                discovered_logs,
             )
             if args.devops_project_id:
-                ensure_log(
+                ensure_log_nonblocking(
                     args,
                     "devops",
                     args.devops_project_id,
                     "all",
                     f"osmh-{args.deployment_id}-devops-builds",
+                    discovered_logs,
                 )
     except ValidationError as error:
         print(f"ERROR: {error}", file=sys.stderr, flush=True)

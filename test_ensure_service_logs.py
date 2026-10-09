@@ -51,34 +51,51 @@ class EnsureServiceLogsTests(unittest.TestCase):
         sleep.assert_called_once_with(2)
 
     @patch.object(logs, "run_oci")
-    @patch.object(logs, "all_logs")
-    def test_existing_service_combination_is_reused_without_create(self, all_logs, run_oci):
-        all_logs.return_value = [service_log()]
-        result = logs.ensure_log(args(), "functions", "ocid1.fnapp.oc1.iad.app", "invoke", "desired")
+    def test_existing_service_combination_is_reused_without_create(self, run_oci):
+        result = logs.ensure_log(
+            args(), "functions", "ocid1.fnapp.oc1.iad.app", "invoke", "desired", [service_log()]
+        )
         self.assertEqual(result, "ocid1.log.oc1.iad.existing")
         run_oci.assert_not_called()
 
     @patch.object(logs, "run_oci")
-    @patch.object(logs, "list_logs")
-    @patch.object(logs, "all_logs")
-    def test_display_name_collision_gets_a_unique_suffix(self, all_logs, list_logs, run_oci):
-        created = service_log("ocid1.log.oc1.iad.created", "desired-2")
-        all_logs.side_effect = [[], [created]]
-        list_logs.return_value = [{"display-name": "desired"}]
+    def test_display_name_collision_gets_a_unique_suffix(self, run_oci):
         run_oci.return_value = subprocess.CompletedProcess([], 0, json.dumps({"data": {}}), "")
-        result = logs.ensure_log(args(), "functions", "ocid1.fnapp.oc1.iad.app", "invoke", "desired")
-        self.assertEqual(result, "ocid1.log.oc1.iad.created")
+        result = logs.ensure_log(
+            args(),
+            "functions",
+            "ocid1.fnapp.oc1.iad.app",
+            "invoke",
+            "desired",
+            [{"display-name": "desired", "log-group-id": args().log_group_id}],
+        )
+        self.assertEqual(result, "created")
         command = run_oci.call_args.args[0]
         self.assertEqual(command[command.index("--display-name") + 1], "desired-2")
 
     @patch.object(logs, "run_oci")
-    @patch.object(logs, "list_logs", return_value=[])
-    @patch.object(logs, "all_logs")
-    def test_concurrent_conflict_is_relisted_and_reused(self, all_logs, _list_logs, run_oci):
-        all_logs.side_effect = [[], [service_log()]]
+    def test_conflict_is_treated_as_already_configured(self, run_oci):
         run_oci.return_value = subprocess.CompletedProcess([], 1, "", "409-Conflict")
-        result = logs.ensure_log(args(), "functions", "ocid1.fnapp.oc1.iad.app", "invoke", "desired")
-        self.assertEqual(result, "ocid1.log.oc1.iad.existing")
+        result = logs.ensure_log(
+            args(), "functions", "ocid1.fnapp.oc1.iad.app", "invoke", "desired", None
+        )
+        self.assertEqual(result, "existing")
+
+    @patch.object(logs, "run_oci")
+    def test_unavailable_discovery_does_not_block_creation(self, run_oci):
+        run_oci.return_value = subprocess.CompletedProcess([], 0, "", "")
+        result = logs.ensure_log(
+            args(), "functions", "ocid1.fnapp.oc1.iad.app", "invoke", "desired", None
+        )
+        self.assertEqual(result, "created")
+
+    @patch.object(logs, "run_oci")
+    def test_non_conflict_create_failure_is_nonblocking(self, run_oci):
+        run_oci.return_value = subprocess.CompletedProcess([], 1, "", "NotAuthorized")
+        result = logs.ensure_log_nonblocking(
+            args(), "functions", "ocid1.fnapp.oc1.iad.app", "invoke", "desired", None
+        )
+        self.assertEqual(result, "skipped")
 
     def test_source_accepts_cli_and_provider_shapes(self):
         direct = service_log()
