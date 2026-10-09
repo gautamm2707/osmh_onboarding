@@ -83,6 +83,7 @@ class ResourceManagerPackageTests(unittest.TestCase):
 
     def test_console_schema_uses_dynamic_compute_list_and_managed_auth(self):
         schema = (ROOT / "schema.yaml").read_text()
+        variables = (ROOT / "orm_variables.tf").read_text()
         self.assertIn("type: list\n    valueType: selected_instance_id", schema)
         self.assertIn("target_compartment_ocid:\n    type: oci:identity:compartment:id", schema)
         self.assertIn("compartment_ocid:\n    type: string\n    visible: false", schema)
@@ -93,6 +94,7 @@ class ResourceManagerPackageTests(unittest.TestCase):
         self.assertNotIn("session.region", schema)
         self.assertNotIn("console_region", schema)
         self.assertIn("source_commit:\n    type: string\n    default: 5cc748857a4a7029d035d9c3a3b8c0539b8f49e4\n    visible: false", schema)
+        self.assertIn('default     = "5cc748857a4a7029d035d9c3a3b8c0539b8f49e4"', variables)
         self.assertNotIn("title: Function image", schema)
         self.assertNotIn("ocir_auth_token", schema.casefold())
 
