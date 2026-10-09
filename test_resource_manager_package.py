@@ -86,7 +86,7 @@ class ResourceManagerPackageTests(unittest.TestCase):
         self.assertIn("title: Region", schema)
         self.assertNotIn("session.region", schema)
         self.assertNotIn("console_region", schema)
-        self.assertIn("source_commit:\n    type: string\n    default: 0ae272811ea33d3c78d903d5bbe1f146310a5428\n    visible: false", schema)
+        self.assertIn("source_commit:\n    type: string\n    default: 2b7b1ed2c97995fae6ae9c240dc823d28cd3a230\n    visible: false", schema)
         self.assertNotIn("title: Function image", schema)
         self.assertNotIn("ocir_auth_token", schema.casefold())
 
