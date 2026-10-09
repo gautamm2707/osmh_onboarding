@@ -101,6 +101,7 @@ class ResourceManagerPackageTests(unittest.TestCase):
     def test_cloud_build_uses_supported_runner_and_repository_settings(self):
         build = (ROOT / "orm_build.tf").read_text()
         dockerfile = (ROOT / "function/Dockerfile").read_text()
+        dockerignore = (ROOT / ".dockerignore").read_text()
         requirements = (ROOT / "function/requirements.txt").read_text()
         self.assertIn('image                              = "OL8_X86_64_STANDARD_10"', build)
         self.assertNotIn("is_immutable", build)
@@ -123,6 +124,7 @@ class ResourceManagerPackageTests(unittest.TestCase):
         self.assertIn("--index-url https://pypi.org/simple", dockerfile)
         self.assertNotIn("artifactory-builds.oci.oraclecorp.com", dockerfile)
         self.assertIn("fdk==0.1.125", requirements)
+        self.assertIn("!osmh_selection.py", dockerignore)
 
     def test_first_apply_allows_iam_to_propagate(self):
         variables = (ROOT / "orm_variables.tf").read_text()
