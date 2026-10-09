@@ -84,6 +84,10 @@ resource "terraform_data" "validate" {
       error_message = "Workload regions must include the selected instances' deployment region."
     }
     precondition {
+      condition     = !(var.onboard_all_instances && length(local.selected_ids) > 0)
+      error_message = "Choose Onboard all eligible instances or individual Compute instances, not both."
+    }
+    precondition {
       condition     = !var.build_function_image || (can(regex("^[0-9a-f]{40}$", var.source_commit)) && can(regex("^ocid1\\.vaultsecret\\.", var.github_token_secret_id)))
       error_message = "Cloud builds require a full Git commit SHA and the OCID of a GitHub token stored in OCI Vault."
     }

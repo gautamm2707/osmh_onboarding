@@ -1,12 +1,12 @@
 title: Onboard in OSMH
 description: Deploy scheduled tag-based OS Management Hub onboarding in your OCI tenancy.
 schemaVersion: 1.1.0
-version: "1.13"
+version: "1.14"
 locale: en
 informationalText: Select the deployment region and target compartment below. The target compartment can differ from the compartment that stores the stack. Apply validates and opts in selected instances. Daily runs reconcile tagged instances across the target compartment tree.
 variableGroups:
   - title: Region, compartment and Compute selection
-    variables: ['${region}', '${target_compartment_ocid}', '${selected_instance_ids}']
+    variables: ['${region}', '${target_compartment_ocid}', '${onboard_all_instances}', '${selected_instance_ids}']
   - title: Function application and networking
     variables: ['${create_function_application}', '${application_id}', '${create_network}', '${existing_vcn_id}', '${existing_subnet_id}']
   - title: Daily schedule
@@ -16,7 +16,7 @@ variableGroups:
   - title: Instance opt in and access
     variables: ['${tag_namespace}', '${use_existing_tag_namespace}', '${existing_tag_namespace_id}', '${create_instance_iam}']
   - title: Advanced operations
-    variables: ['${workload_regions}', '${repository_families}', '${group_prefix}', '${logging_enabled}', '${invoke_after_deploy}', '${iam_wait_seconds}', '${build_timeout_seconds}', '${runtime_iam_wait_seconds}']
+    variables: ['${repository_families}', '${group_prefix}', '${logging_enabled}', '${invoke_after_deploy}']
   - title: Console context
     visible: false
     variables: ['${tenancy_ocid}', '${compartment_ocid}', '${selected_instance_id}', '${subnet_ids}', '${build_function_image}', '${source_repository_url}', '${source_branch}', '${source_commit}', '${build_revision}', '${existing_image}']
@@ -41,8 +41,15 @@ variables:
     type: list
     valueType: selected_instance_id
     title: Compute instances to onboard
-    description: The native OCI picker lists instances from this exact compartment and cannot filter by state, OKE membership, OS support, or OSMH registration. Select intended instances; Apply rejects stopped/OKE/unsupported choices and skips instances already registered in OSMH. Daily reconciliation scans the target compartment tree for tagged instances.
-    required: true
+    description: Select individual instances when Onboard all eligible instances is cleared. The native OCI picker lists this exact compartment and cannot filter its rows. Apply rejects stopped/OKE/unsupported choices and skips instances already registered in OSMH.
+    required: false
+    visible:
+      not: ['${onboard_all_instances}']
+  onboard_all_instances:
+    type: boolean
+    title: Onboard all eligible instances
+    description: Select every running, supported, non-OKE instance that is not already registered in OSMH across this compartment and its descendants. This also covers existing instances before the tag default can affect new resources.
+    default: false
   selected_instance_id:
     type: oci:core:instance:id
     title: Compute instance
@@ -51,8 +58,7 @@ variables:
       compartmentId: ${target_compartment_ocid}
   workload_regions:
     type: string
-    title: Workload regions
-    description: Leave empty for the selected deployment region, enter comma-separated region names without spaces, or enter all.
+    visible: false
   build_function_image:
     type: boolean
     default: true
@@ -278,22 +284,19 @@ variables:
     default: true
   iam_wait_seconds:
     type: integer
-    title: Build connection readiness timeout in seconds
-    description: Apply verifies the Vault PAT and pinned GitHub source, then polls OCI DevOps connection validation. It starts the build immediately when ready and stops after this limit.
+    visible: false
     default: 3600
     minimum: 60
     maximum: 3600
   runtime_iam_wait_seconds:
     type: integer
-    title: Initial Function IAM wait in seconds
-    description: Short wait before the detached initial invocation. Increase only when Function logs show that new operational IAM policies have not propagated.
+    visible: false
     default: 120
     minimum: 0
     maximum: 3600
   build_timeout_seconds:
     type: integer
-    title: Total build retry timeout in seconds
-    description: Maximum time for OCI DevOps build attempts, including retries for transient Vault, source access, and IAM propagation failures.
+    visible: false
     default: 7200
     minimum: 1800
     maximum: 10800

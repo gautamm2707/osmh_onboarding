@@ -10,10 +10,15 @@ import time
 
 
 def command(config, payload):
-    if not isinstance(payload, dict) or set(payload) - {"dry_run", "onboard_instance_ids"}:
-        raise ValueError("Only dry_run and stack-authorized onboard_instance_ids are accepted.")
+    if not isinstance(payload, dict) or set(payload) - {
+            "dry_run", "onboard_instance_ids", "onboard_all_instances"}:
+        raise ValueError("Only dry_run and stack-authorized onboarding selections are accepted.")
     if "dry_run" in payload and not isinstance(payload["dry_run"], bool):
         raise ValueError("dry_run must be a JSON boolean.")
+    if "onboard_all_instances" in payload and payload["onboard_all_instances"] is not True:
+        raise ValueError("onboard_all_instances must be true when supplied.")
+    if "onboard_instance_ids" in payload and "onboard_all_instances" in payload:
+        raise ValueError("Choose an exact instance selection or all eligible instances, not both.")
     authorized_selection(config, payload)
     target = config.get("OSMH_COMPARTMENT_ID", "")
     if not target.startswith(("ocid1.compartment.", "ocid1.tenancy.")):
@@ -36,6 +41,12 @@ def command(config, payload):
 
 
 def authorized_selection(config, payload):
+    if payload.get("onboard_all_instances") is True:
+        if config.get("OSMH_ONBOARD_ALL", "false").lower() != "true":
+            raise ValueError("All-instance onboarding is not authorized by the deployed stack configuration.")
+        if not config.get("OSMH_SELECTION_REGION"):
+            raise ValueError("OSMH_SELECTION_REGION is required for all-instance onboarding.")
+        return "all"
     if "onboard_instance_ids" not in payload:
         return None
     # Only the selection recorded in the Function's deployment configuration
@@ -61,7 +72,11 @@ def commands(config, payload):
         return [reconcile]
     tag = [sys.executable, "-u", str(Path(__file__).resolve().with_name("osmh_selection.py")),
            config["OSMH_COMPARTMENT_ID"], "--region", config["OSMH_SELECTION_REGION"],
-           "--tag-namespace", config["OSMH_TAG_NAMESPACE"], "--instance-ids", selection]
+           "--tag-namespace", config["OSMH_TAG_NAMESPACE"]]
+    if selection == "all":
+        tag.append("--all")
+    else:
+        tag.extend(["--instance-ids", selection])
     if payload.get("dry_run", False):
         tag.append("--dry-run")
     return [tag, reconcile]

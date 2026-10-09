@@ -23,7 +23,8 @@ def instance(id=FIRST, **changes):
 def config(ids):
     return {"OSMH_COMPARTMENT_ID": SCOPE, "OSMH_TAG_NAMESPACE": "OSMH",
             "OSMH_SELECTION_REGION": "us-ashburn-1", "OSMH_REGIONS": "us-ashburn-1",
-            "OSMH_SELECTION_SHA256": hashlib.sha256(json.dumps(sorted(set(ids)), separators=(",", ":")).encode()).hexdigest()}
+            "OSMH_SELECTION_SHA256": hashlib.sha256(json.dumps(sorted(set(ids)), separators=(",", ":")).encode()).hexdigest(),
+            "OSMH_ONBOARD_ALL": "false"}
 
 
 class SelectedInstanceTests(unittest.TestCase):
@@ -44,6 +45,24 @@ class SelectedInstanceTests(unittest.TestCase):
                 func.commands(config([FIRST]), {"onboard_instance_ids": payload})
         with self.assertRaises(ValueError):
             func.commands({"OSMH_COMPARTMENT_ID": SCOPE, "OSMH_TAG_NAMESPACE": "OSMH"}, {"onboard_instance_ids": [FIRST]})
+
+    def test_all_instances_requires_stack_authorization(self):
+        settings = config([])
+        with self.assertRaises(ValueError):
+            func.commands(settings, {"onboard_all_instances": True})
+        settings["OSMH_ONBOARD_ALL"] = "true"
+        steps = func.commands(settings, {"onboard_all_instances": True})
+        self.assertEqual(len(steps), 2)
+        self.assertIn("--all", steps[0])
+        self.assertNotIn("--instance-ids", steps[0])
+
+    def test_all_instances_rejects_false_or_mixed_selection(self):
+        settings = config([FIRST])
+        settings["OSMH_ONBOARD_ALL"] = "true"
+        with self.assertRaises(ValueError):
+            func.commands(settings, {"onboard_all_instances": False})
+        with self.assertRaises(ValueError):
+            func.commands(settings, {"onboard_all_instances": True, "onboard_instance_ids": [FIRST]})
 
     def fixture(self, instances):
         compute = Mock()
@@ -93,6 +112,27 @@ class SelectedInstanceTests(unittest.TestCase):
         self.assertEqual([item.id for item in scan.call_args.args[1]], [SECOND])
         apply.assert_called_once()
         self.assertEqual(apply.call_args.args[2].id, SECOND)
+
+    def test_all_tags_only_eligible_unregistered_instances_in_tree(self):
+        child = "ocid1.compartment.oc1..child"
+        first = instance()
+        second = instance(SECOND, compartment_id=child)
+        args = NS(compartment_id=SCOPE, tag_namespace="OSMH", dry_run=False)
+        with patch.object(selection, "discover_compartments", return_value=[
+                NS(id=SCOPE, name="root", compartment_id=None),
+                NS(id=child, name="child", compartment_id=SCOPE)]), \
+                patch.object(selection, "list_call_get_all_results",
+                             side_effect=[NS(data=[first]), NS(data=[second])]), \
+                patch.object(selection, "list_managed_in_compartments",
+                             return_value=[NS(id=FIRST, location="OCI_COMPUTE")]), \
+                patch.object(selection, "discover_oke_instance_ids", return_value={}) as oke, \
+                patch.object(selection, "scan_candidates", return_value=[(second, None)]), \
+                patch.object(selection, "apply_instance_tag") as apply:
+            selection.tag_all(args, Mock(), Mock(), Mock(), Mock())
+        self.assertEqual([item.id for item in oke.call_args.args[2]], [SECOND])
+        apply.assert_called_once()
+        self.assertEqual(apply.call_args.args[2].id, SECOND)
+        self.assertEqual(apply.call_args.args[4], {SCOPE, child})
 
     def test_failed_tagging_does_not_start_reconciliation(self):
         process = Mock(stdout=iter(["tagging failed\n"]))

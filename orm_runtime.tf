@@ -24,6 +24,7 @@ resource "oci_functions_function" "worker" {
     OSMH_REGIONS             = var.workload_regions == "" ? var.region : var.workload_regions
     OSMH_SELECTION_REGION    = var.region
     OSMH_SELECTION_SHA256    = sha256(jsonencode(local.selected_ids))
+    OSMH_ONBOARD_ALL         = tostring(var.onboard_all_instances)
     OSMH_SKIP_IAM            = "true"
     OSMH_REPOSITORY_FAMILIES = var.repository_families
     OSMH_GROUP_PREFIX        = var.group_prefix
@@ -124,11 +125,11 @@ resource "terraform_data" "runtime_iam" {
   }
 }
 resource "oci_functions_invoke_function" "initial" {
-  count                = (var.invoke_after_deploy || length(local.selected_ids) > 0) ? 1 : 0
-  depends_on           = [terraform_data.runtime_iam, oci_logging_log.worker, oci_identity_tag.opt_in, data.oci_identity_tag.existing]
+  count                = (var.invoke_after_deploy || var.onboard_all_instances || length(local.selected_ids) > 0) ? 1 : 0
+  depends_on           = [terraform_data.runtime_iam, oci_logging_log.worker, oci_identity_tag_default.new_opt_in, oci_identity_tag_default.existing_opt_in]
   function_id          = oci_functions_function.worker.id
   fn_invoke_type       = "detached"
-  invoke_function_body = length(local.selected_ids) > 0 ? jsonencode({ onboard_instance_ids = local.selected_ids }) : "{}"
+  invoke_function_body = var.onboard_all_instances ? jsonencode({ onboard_all_instances = true }) : (length(local.selected_ids) > 0 ? jsonencode({ onboard_instance_ids = local.selected_ids }) : "{}")
   lifecycle {
     replace_triggered_by = [oci_functions_function.worker]
   }

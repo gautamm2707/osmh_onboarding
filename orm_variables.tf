@@ -183,6 +183,11 @@ variable "selected_instance_ids" {
     error_message = "Select valid Compute instance OCIDs."
   }
 }
+variable "onboard_all_instances" {
+  type        = bool
+  default     = false
+  description = "Opt in every eligible unregistered Compute instance in the selected compartment tree during the initial invocation."
+}
 variable "create_function_application" {
   type        = bool
   default     = null

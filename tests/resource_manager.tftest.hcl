@@ -35,11 +35,15 @@ mock_provider "oci" {
   }
   mock_data "oci_identity_tag" {
     defaults = {
+      id         = "ocid1.tagdefinition.oc1..existing"
       name       = "managedby"
       state      = "ACTIVE"
       is_retired = false
       validator  = [{ validator_type = "ENUM", values = ["osmanagementhub"] }]
     }
+  }
+  mock_data "oci_identity_tag_defaults" {
+    defaults = { tag_defaults = [] }
   }
 }
 
@@ -135,6 +139,10 @@ run "reuse_namespace_without_owning_it" {
     condition     = length(oci_identity_tag_namespace.opt_in) == 0 && length(oci_identity_tag.opt_in) == 0
     error_message = "Reused namespaces and keys must not be created or managed by this stack."
   }
+  assert {
+    condition     = length(oci_identity_tag_default.existing_opt_in) == 1 && length(oci_identity_tag_default.new_opt_in) == 0
+    error_message = "Reuse mode must create a missing compartment tag default without taking ownership of the namespace or key."
+  }
 }
 run "ignore_hidden_existing_network_when_creating_new" {
   command = plan
@@ -195,6 +203,29 @@ run "selected_instances_are_bound_to_initial_invocation" {
     condition     = oci_resource_scheduler_schedule.nightly.recurrence_details == "15 5 * * *"
     error_message = "The schedule must use the selected UTC time."
   }
+}
+run "all_instances_are_bound_to_initial_invocation" {
+  command = plan
+  variables {
+    onboard_all_instances = true
+    invoke_after_deploy   = false
+  }
+  assert {
+    condition     = oci_functions_invoke_function.initial[0].invoke_function_body == jsonencode({ onboard_all_instances = true }) && oci_functions_function.worker.config.OSMH_ONBOARD_ALL == "true"
+    error_message = "Bulk onboarding must require the deployed all-instances authorization and send only the authorized flag."
+  }
+  assert {
+    condition     = length(oci_identity_tag_default.new_opt_in) == 1 && oci_identity_tag_default.new_opt_in[0].value == "osmanagementhub"
+    error_message = "A new namespace must create the compartment tag default used for future resources."
+  }
+}
+run "reject_mixed_all_and_individual_selection" {
+  command = plan
+  variables {
+    onboard_all_instances = true
+    selected_instance_ids = ["ocid1.instance.oc1.iad.first"]
+  }
+  expect_failures = [terraform_data.validate]
 }
 run "reject_instance_in_other_compartment" {
   command = plan

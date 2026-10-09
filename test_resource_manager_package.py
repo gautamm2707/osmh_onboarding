@@ -97,6 +97,17 @@ class ResourceManagerPackageTests(unittest.TestCase):
         self.assertIn('default     = "18fa39fa959be7a337e49135b5c17622ab84d9e2"', variables)
         self.assertNotIn("title: Function image", schema)
         self.assertNotIn("ocir_auth_token", schema.casefold())
+        self.assertIn("title: Onboard all eligible instances", schema)
+        self.assertIn("not: ['${onboard_all_instances}']", schema)
+        for title in ("Workload regions", "Build connection readiness timeout in seconds",
+                      "Total build retry timeout in seconds", "Initial Function IAM wait in seconds"):
+            self.assertNotIn("title: " + title, schema)
+
+    def test_compartment_tag_default_is_managed(self):
+        tags = (ROOT / "orm_tags_iam.tf").read_text()
+        self.assertIn('resource "oci_identity_tag_default" "new_opt_in"', tags)
+        self.assertIn('resource "oci_identity_tag_default" "existing_opt_in"', tags)
+        self.assertGreaterEqual(tags.count('value             = "osmanagementhub"'), 2)
 
     def test_cloud_build_uses_supported_runner_and_repository_settings(self):
         build = (ROOT / "orm_build.tf").read_text()

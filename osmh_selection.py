@@ -4,9 +4,10 @@ import json
 import re
 
 import oci
+from oci.pagination import list_call_get_all_results
 
-from onboard_osmh import list_managed_in_compartments, scan_candidates
-from osmh_discovery import discover_oke_instance_ids
+from onboard_osmh import compartment_labels, list_managed_in_compartments, scan_candidates
+from osmh_discovery import discover_compartments, discover_oke_instance_ids
 from osmh_runtime import load_auth, prepare_identity
 from osmh_tags import TAG_KEY, TAG_VALUE, apply_instance_tag
 
@@ -54,21 +55,56 @@ def tag_selected(args, compute, container_engine, managed):
         apply_instance_tag(args, compute, instance, args.tag_namespace, {args.compartment_id})
 
 
+def tag_all(args, identity, compute, container_engine, managed):
+    """Tag every currently eligible, unregistered instance in the target tree."""
+    compartments = discover_compartments(identity, args.compartment_id)
+    compartment_ids = [item.id for item in compartments]
+    labels = compartment_labels(compartments)
+    instances = []
+    for compartment in compartments:
+        instances.extend(list_call_get_all_results(compute.list_instances, compartment.id).data)
+    inventory = list_managed_in_compartments(managed, compartment_ids)
+    registered = {item.id for item in inventory if getattr(item, "location", None) == "OCI_COMPUTE"}
+    unregistered = [item for item in instances if item.id not in registered]
+    for item in instances:
+        if item.id in registered:
+            print(f"Already registered in OSMH; skip opt-in tag: {item.display_name} ({item.id})")
+    oke = discover_oke_instance_ids(container_engine, compartment_ids, unregistered)
+    eligible = scan_candidates(compute, unregistered, oke, {}, labels)
+    targets = []
+    for instance, platform in eligible:
+        previous = ((instance.defined_tags or {}).get(args.tag_namespace) or {}).get(TAG_KEY)
+        if previous not in (None, TAG_VALUE):
+            print(f"SKIP {instance.display_name}: conflicting {args.tag_namespace}.{TAG_KEY}={previous!r}")
+            continue
+        targets.append((instance, platform))
+    for instance, _ in targets:
+        apply_instance_tag(args, compute, instance, args.tag_namespace, set(compartment_ids))
+    print(f"Tagged {len(targets)} eligible unregistered instance(s) across "
+          f"{len(compartment_ids)} compartment(s).")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("compartment_id")
     parser.add_argument("--region", required=True)
     parser.add_argument("--tag-namespace", required=True)
-    parser.add_argument("--instance-ids", required=True, type=json.loads)
+    choice = parser.add_mutually_exclusive_group(required=True)
+    choice.add_argument("--instance-ids", type=json.loads)
+    choice.add_argument("--all", dest="all_instances", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     args.auth = "resource_principal"
     args.skip_iam = True
     config, kwargs = load_auth(args)
-    prepare_identity(config, kwargs, args.compartment_id)
-    tag_selected(args, oci.core.ComputeClient(config, **kwargs),
-                 oci.container_engine.ContainerEngineClient(config, **kwargs),
-                 oci.os_management_hub.ManagedInstanceClient(config, **kwargs))
+    identity = prepare_identity(config, kwargs, args.compartment_id)
+    compute = oci.core.ComputeClient(config, **kwargs)
+    container_engine = oci.container_engine.ContainerEngineClient(config, **kwargs)
+    managed = oci.os_management_hub.ManagedInstanceClient(config, **kwargs)
+    if args.all_instances:
+        tag_all(args, identity, compute, container_engine, managed)
+    else:
+        tag_selected(args, compute, container_engine, managed)
 
 
 if __name__ == "__main__":

@@ -49,6 +49,42 @@ data "oci_identity_tag" "existing" {
     }
   }
 }
+
+# A tag default affects resources created after it becomes ACTIVE and is
+# inherited by child compartments. Existing instances are handled separately by
+# the initial all-instances invocation.
+data "oci_identity_tag_defaults" "existing_opt_in" {
+  provider          = oci.home
+  count             = var.use_existing_tag_namespace ? 1 : 0
+  compartment_id    = local.target_compartment_id
+  tag_definition_id = data.oci_identity_tag.existing[0].id
+  state             = "ACTIVE"
+}
+resource "oci_identity_tag_default" "new_opt_in" {
+  provider          = oci.home
+  count             = var.use_existing_tag_namespace ? 0 : 1
+  compartment_id    = local.target_compartment_id
+  tag_definition_id = oci_identity_tag.opt_in[0].id
+  value             = "osmanagementhub"
+  is_required       = false
+}
+resource "oci_identity_tag_default" "existing_opt_in" {
+  provider          = oci.home
+  count             = var.use_existing_tag_namespace && length(data.oci_identity_tag_defaults.existing_opt_in[0].tag_defaults) == 0 ? 1 : 0
+  compartment_id    = local.target_compartment_id
+  tag_definition_id = data.oci_identity_tag.existing[0].id
+  value             = "osmanagementhub"
+  is_required       = false
+}
+resource "terraform_data" "validate_existing_tag_default" {
+  count = var.use_existing_tag_namespace && length(data.oci_identity_tag_defaults.existing_opt_in[0].tag_defaults) > 0 ? 1 : 0
+  lifecycle {
+    precondition {
+      condition     = alltrue([for item in data.oci_identity_tag_defaults.existing_opt_in[0].tag_defaults : item.value == "osmanagementhub"])
+      error_message = "The selected compartment already has this tag default with another value; change it to osmanagementhub before applying this stack."
+    }
+  }
+}
 resource "oci_identity_dynamic_group" "instances" {
   provider       = oci.home
   count          = var.create_instance_iam ? 1 : 0
