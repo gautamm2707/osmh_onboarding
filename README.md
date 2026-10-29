@@ -1,362 +1,286 @@
-# Tag-based OCI OS Management Hub onboarding
+# OSMH Utility
 
-## Deploy from the OCI Console
-
-The button loads the dedicated Resource Manager ZIP from this repository. Its root contains the new Console form and Terraform configuration. If an already-open wizard shows `auth` or `bootstrap_iam`, start again from the button or follow the [source correction steps](RESOURCE_MANAGER.md#if-configure-variables-still-shows-the-old-form).
-
-[Onboard in OSMH](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https%3A%2F%2Fgithub.com%2Fgautamm2707%2Fosmh_onboarding%2Fraw%2Frefs%2Fheads%2Fmain%2Fresource-manager%2Fosmh-resource-manager.zip)
-
-The repository root contains the Resource Manager Terraform and Console schema.
-The published ZIP is `resource-manager/osmh-resource-manager.zip`. The link opens
-Create Stack in your OCI session; review the configuration and run Plan/Apply.
-The stack can build the Function image through OCI DevOps or use an existing OCIR
-image, then deploy the Function, IAM, optional networking, logs and daily schedule.
-The form uses a subscribed Console region, then presents an onboarding compartment independent from the stack-storage compartment, bulk or individual Compute selection, application/network choices, a daily UTC time, and build-source authentication with its own Vault-secret compartment. Apply starts a detached job that validates and opts in eligible instances through the defined tag. An existing exact-name namespace is reused automatically, and a compartment tag default opts in future Compute instances for scheduled evaluation. Existing Function applications use an OCID field because OCI has no native application dropdown.
-
-Read the [updated blog](BLOG.md) and [Resource Manager deployment guide](RESOURCE_MANAGER.md).
-For a direct-upload ZIP, run `python3 package_resource_manager.py`. Keep Resource
-Manager and local deployments in separate, non-overlapping scopes. The instructions
-below describe the existing local CLI deployment path.
-
-
-`onboard_osmh.py <compartment-or-tenancy-OCID>` now scans the supplied root and
-all active descendants, excludes OKE workers, prompts for instance selection,
-creates a defined-tag namespace in the supplied compartment, and tags the selected
-instances. It then **automatically calls `reconcile_osmh.py --deploy`**, which
-builds/pushes the image and provisions the Function, bootstrap IAM, logging and
-daily schedule. Existing resources in the deployment state are reused. It can
-also create a dedicated private Function network and a private OCIR repository.
-
-Inside the scheduled Function, `reconcile_osmh.py` discovers tagged instances and reuses
-the existing IAM, repository, registration-profile, Cloud Agent and OS/architecture
-group logic. The OCI Function packages it and runs daily through Resource Scheduler
-at **22:00 IST / 16:30 UTC**. The laptop need not remain running after deployment.
-The scheduled invocation only reconciles instances; it does not redeploy itself.
-Deployment is local; before prompting, the selection phase checks current OSMH
-inventory so already registered instances are marked correctly. After a successful
-deployment, the deployer immediately starts one detached Function invocation for
-initial onboarding, then the daily schedule handles newly tagged instances.
-
-## One-command setup with region selection
-
-Start Docker Desktop/Colima, install Terraform, and configure an authorized OCI
-profile. Have an OCI auth token for the user in that profile ready:
-
-```bash
-cd /Users/gautammishra/Documents/OSMH
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-```
-
-No separate `docker login`, registry username, namespace or image argument is
-needed. The script resolves the selected profile's user OCID to its IAM username,
-reads the tenancy's registry namespace, and uses the home-region OCIR. For example,
-it resolves `id3kvohtwgjy/gautam.mishra@oracle.com` and `iad.ocir.io` when those are
-the profile's actual user/namespace and Ashburn is the home region. Domain-qualified
-usernames are handled as returned by IAM. The image name includes the scope OCID
-suffix and a source-code hash to version code changes automatically.
-
-Preview the complete workflow for two workload regions:
-
-```bash
-python onboard_osmh.py <COMPARTMENT_OR_TENANCY_OCID> \
-  --profile pridhu \
-  --regions us-ashburn-1,us-phoenix-1 \
-  --dry-run
-```
-
-Repeat **the same command without `--dry-run`**. Choose the network option:
-
-1. **Existing VCN/subnet:** select a numbered VCN, then an available subnet in it.
-2. **New network:** create a dedicated private VCN, subnet and NAT gateway.
-
-Select the desired instances in each workload region. After tagging completes,
-deployment runs automatically; no separate
-`reconcile_osmh.py` or Terraform command is required. Terraform's saved plan is
-applied automatically; a plan that deletes/replaces existing resources is refused
-for separate review. Before building/pushing the image, enter the OCI auth token
-at the hidden prompt. This is an **OCI auth token**, not your console password or
-API signing key. Login uses `--password-stdin`; temporary registry credentials are
-removed after the build/push, and your normal Docker login configuration is not
-modified. The selected Docker Desktop/Colima daemon context is preserved.
-
-Region choices:
-
-| Flag | Instances processed |
-| --- | --- |
-| `--regions us-ashburn-1` | One workload region |
-| `--regions us-ashburn-1,us-phoenix-1` | Multiple workload regions |
-| `--all-regions` | All READY subscribed regions, including future subscriptions on scheduled runs |
-| no region flag | Region from the selected OCI profile |
-
-The single Function, registry image, schedule and optional network always reside
-in the **tenancy home region**, regardless of the workload regions. OCI requires
-the Function image and Function to be in the same region.
-`--deployment-region` is now an optional assertion of the home region; a different
-value is rejected before tagging. Workload regions may be different.
-
-The deployment picker first lets you reuse an existing Function application or
-create a new one. Reusing an application avoids the Functions Application service
-limit and does not ask for VCN/subnet input. The reuse picker searches the supplied
-compartment/root and its descendants in the home region, then shows each Function
-application with its compartment path. Use `--function-application-id <fnapp-OCID>`
-for non-interactive reuse. To browse Function applications or shared networking
-elsewhere, pass `--network-compartment-id <NETWORK_COMPARTMENT_OR_TENANCY_OCID>`
-to search that tree. If creating a new app, the network picker uses the same scope.
-You may bypass the network picker with `--create-function-network` or
-`--function-subnet-ids <subnet-OCID>[,<another-subnet-OCID>]`. Existing subnets must
-support Functions and have the required outbound connectivity; they are not
-reconfigured. `--function-image` is an optional override, restricted to this
-tenancy's namespace and home-region registry. `--skip-function-build` requires an
-already-pushed image and skips Docker login. Otherwise, the hidden token prompt
-requires an interactive terminal even when networking is provided through flags.
-Once a Terraform state has created and owns a Function application/network, later
-reruns preserve that ownership even if `--function-application-id` is supplied;
-this avoids planning destructive deletes of the managed app/network.
-Invocation log creation is off by default because reused Function applications
-may already have an invoke log; pass `--enable-function-logging` only when you
-want the script to create one. The first real Function run starts automatically
-after deployment and transient Functions invoke errors are retried; pass
-`--skip-initial-function-invoke` only when you want to deploy/schedule without
-kicking off initial onboarding. Use `--tag-only` to suppress deployment entirely.
-
-If any regional scan fails, deployment is skipped and applied tags remain. Fix
-the reported issue and rerun. Unsubscribed/non-READY workload regions are skipped
-without blocking valid regions. If deployment fails after tagging, its resources
-and tags are retained; rerun with the same scope, deployment region and state.
-
-## Tag and scope
-
-The namespace defaults to the reusable tenancy-wide name `OSMH`. The key is
-`managedby`, with allowed value `osmanagementhub`. The Compute dynamic group uses
-a constant-size rule, for example:
+Install once, then run `osmh-onboard` from any directory on macOS or Windows.
+This repository contains the installable OSMH Utility and its required runtime,
+Function and Terraform files. The previous standalone-script and Resource Manager
+layouts remain in Git history; their setup instructions do not apply to this
+layout. This repository change does not delete existing OCI resources.
 
 ```text
-ALL {resource.type = 'instance', tag.OSMH.managedby.value = 'osmanagementhub'}
+osmh-onboard <compartment-or-tenancy-OCID> --regions us-ashburn-1 --profile DEFAULT
 ```
 
-No compartment IDs are enumerated. Scope is enforced by recursive discovery and
-the parent-scoped instance policies. New child compartments need no membership
-rule update. Use the same `OSMH` tag namespace for every run and compartment
-unless an administrator intentionally standardizes on a different namespace with
-`--tag-namespace`.
+The existing workflow scans the selected compartment and its descendants in the
+requested regions, excludes detected OKE instances, and offers instance selection.
+It applies the defined opt-in tag, prepares/deploys a home-region OCI Function,
+requests an initial detached reconciliation, and configures daily reconciliation
+at 22:00 IST (16:30 UTC). The Function performs IAM/OSMH reconciliation. A detached
+invocation being accepted does not mean that instance registration has completed;
+check Function logs and OSMH status. `--enable-function-logging` enables the optional
+service log; review its implications when sharing a Function application.
 
-Freeform tags, other namespaces and different values do not qualify. Existing
-defined tags are preserved, with ETag protection against concurrent edits. A
-conflicting `managedby` value stops tagging instead of being overwritten.
+The default opt-in tag is `OSMH.managedby = osmanagementhub`. New instances need
+this tag to be included by the worker, which only scans its configured scope and
+regions. It does not tag every new instance automatically. OSMH profiles/groups
+are centralized in the selected parent scope in each workload region.
+
+The runtime includes discovery paths for Oracle Linux 7–10, Ubuntu
+20.04/22.04/24.04 and Windows Server. Eligibility still depends on the specific
+image, architecture, plugin availability, region and OSMH support. Applicable
+Oracle software-source discovery includes UEK, Ksplice, MySQL and OCI families;
+use `--repository-families none` to opt out of these extra families.
 
 ## Prerequisites
 
-- Python 3.10+ locally (Function container uses Python 3.12), and a working OCI
-  API-key or security-token profile in `~/.oci/config` for the target tenancy.
-- The selection caller must read tenancy/subscriptions, compartments, Compute
-  instances/images and OKE node pools; create/use tag namespaces in the parent;
-  and update selected instances across its subtree. Tenancy-admin credentials
-  cover setup; a restricted user needs these permissions granted beforehand.
-- Deployment needs Terraform 1.5+, Docker with its daemon running, and an OCI
-  auth token for the selected profile's user. Create the token in that user's OCI
-  **Auth tokens** settings. Registry login and image naming are automatic. Never
-  include credentials in the project or Function image.
-- Either let the script create a private VCN/subnet/NAT gateway, or supply a subnet
-  in the deployment region that supports Functions and provides HTTPS
-  connectivity to OCIR and all used OCI APIs, including IAM in the home region
-  and selected workload regions. Multi-region calls may need NAT/proxy routing
-  beyond a regional service gateway. Existing subnets are not reconfigured. Newly
-  created networking has no public instance IPs or ingress rules and permits
-  outbound HTTPS and DNS. NAT, Function, registry and logging usage may incur costs.
-- The deployer must be authorized to create Functions applications/functions,
-  use/create networking and the registry, read VCN/subnet inventories, the profile's
-  IAM user (and identity provider for legacy federated users), the registry namespace
-  and repository inventory, create logs and schedules, and create root IAM
-  policies/dynamic groups. Required services must be available and within quota.
-- Guest instances need a supported OS/image, working Oracle Cloud Agent with
-  the OSMH plugin available, and OSMH network connectivity. Tags do not install a
-  missing agent or fix guest networking.
+- Python 3.10 or newer; Python 3.12 is a practical choice and matches the Function
+  container. `pip` must be available. The installation installs the OCI Python SDK.
+- Git for cloning, or download/extract the source ZIP from GitHub.
+- Terraform 1.5 or newer on PATH; the bundled provider constraint is OCI >=7,<9
+  and a provider lock file is included.
+- Docker CLI and a running Docker engine using Linux containers. Docker Desktop
+  works on Mac and Windows. On Mac, Colima is another option; start it before use.
+  Builds target `linux/amd64`, including when the client is an Apple Silicon Mac.
+- OCI API signing key and profile in `~/.oci/config` (Mac) or
+  `%USERPROFILE%\.oci\config` (Windows). The profile must include `user`, `tenancy`,
+  `fingerprint`, `key_file`, and `region`. The public API key must be uploaded to
+  that OCI user. A session-token profile is also supported while its token is valid.
+- An OCI **auth token** for OCIR login, supplied at the hidden interactive prompt.
+  This is different from the API signing key and your Console password.
+- Permissions to discover compartments/regions/instances and OKE resources; manage
+  the relevant tags, IAM bootstrap resources, OSMH resources, OCIR repositories,
+  Functions, schedules and logging; and create network resources if that option is
+  selected. An appropriately authorized tenancy administrator can bootstrap this.
+  The utility cannot grant its caller permissions that the caller lacks.
+- Subscribed workload regions, service availability/quotas, supported instance
+  images/agents, and outbound connectivity from both the local machine and Function
+  subnet. An existing subnet must already provide the required connectivity.
 
-Existing supported Oracle Linux, Ubuntu and Windows combinations and repository
-selection are retained. OKE exclusions use node pools and known OKE tags/metadata;
-unmarked self-managed Kubernetes workers still need manual review. Only RUNNING,
-supported, non-OKE instances are currently offered for selection.
+Automatic Terraform deployment uses the standard OCI config location above.
+For another tenancy, add a named profile and select it with `--profile`; the input
+compartment/root OCID must belong to that profile's tenancy. Resource availability,
+IAM and networking still need validation in each tenancy.
 
-## 1. Preview, select and tag
+## Install on macOS
 
-Run from this project folder:
+With Python installed, open Terminal:
 
 ```bash
-cd /Users/gautammishra/Documents/OSMH
+git clone https://github.com/gautamm2707/osmh_onboarding.git
+cd osmh_onboarding
+python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements.txt
-python onboard_osmh.py <compartment-or-tenancy-OCID> --dry-run
+python -m pip install --upgrade pip
+python -m pip install .
+osmh-onboard --version
+osmh-onboard --help
+docker info
+terraform version
 ```
 
-Choose `all`, indexes such as `1,3-5`, or `none` to cancel. Repeat without
-`--dry-run` to apply the selected tags. Group arguments are no longer needed:
+Use the Python 3.12 executable instead of `python3` if you have several versions
+and want that version. In each new terminal, activate the environment once:
 
 ```bash
-python onboard_osmh.py <compartment-or-tenancy-OCID>
+source /path/to/osmh_onboarding/.venv/bin/activate
 ```
 
-Use `--profile pridhu` for another OCI profile. Region options remain
-`--regions us-ashburn-1,us-phoenix-1` or `--all-regions`. Multi-region runs skip
-unsubscribed/non-READY regions and select separately in each available region.
-`--all` or `--instance-ids <CSV-OCIDs>` supports unattended tagging. Automatic
-deployment follows tagging unless `--tag-only` is supplied. Use network flags to
-bypass network selection, but image builds still ask for the auth token. Dry runs do not require
-Docker, registry login, or deployment prompts and make no deployment changes.
+After activation, `osmh-onboard` works from any folder. Without activation, invoke
+`/path/to/osmh_onboarding/.venv/bin/osmh-onboard` directly. Replace `/path/to`
+with the actual parent directory of your clone.
 
-Opt in future instances by applying the same defined tag at creation or rerunning
-selection. The worker does not tag all newly created instances automatically.
-Removing the tag prevents further reconciliation but does not unregister an
-already managed instance.
+## Install on Windows (PowerShell)
 
-## 2. Preview the worker locally
+Open PowerShell in your preferred parent directory and clone the repository.
+Do not copy a Mac `.venv`, Terraform provider cache or installed binaries.
+Use Docker Desktop with its Linux/WSL2 engine running and Terraform on PATH.
+Install Python 3.12 first, or replace `-3.12` with an installed version (3.10+):
+
+```powershell
+git clone https://github.com/gautamm2707/osmh_onboarding.git
+cd osmh_onboarding
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install .
+.\.venv\Scripts\osmh-onboard.exe --version
+.\.venv\Scripts\osmh-onboard.exe --help
+docker info
+terraform version
+```
+
+You may activate with `.\.venv\Scripts\Activate.ps1` and then use `osmh-onboard`
+from any folder. If PowerShell blocks activation, use the full executable path;
+no execution-policy change is necessary:
+
+```powershell
+& "C:\path\to\osmh_onboarding\.venv\Scripts\osmh-onboard.exe" --help
+```
+
+Create `%USERPROFILE%\.oci\config` and copy/configure your authorized API signing
+key securely. Update `key_file` to its Windows location. A portable example is
+`key_file=~/.oci/oci_api_key.pem`. Do not copy Mac absolute paths into that profile.
+
+## Existing deployments: import state before the first real run
+
+The utility's state location is independent of the old scripts. Import the
+**authoritative** old `.deployment` directory if you already deployed resources
+for the same tenancy/scope/region. Do not start from empty state for an existing
+deployment. This command copies state and deployment-mode files, not credentials,
+plans, or provider caches, and does not contact OCI:
 
 ```bash
-python reconcile_osmh.py <compartment-or-tenancy-OCID> --profile pridhu --dry-run
+osmh-onboard --import-state "/path/to/previous/project/.deployment"
 ```
 
-This reads tags already present in OCI. A tagging dry run does not persist them.
-The worker makes no IAM changes if there are no eligible tagged instances. Remove
-`--dry-run` to exercise the actual worker locally before deployment.
+Use the folder from the most recent deployment; an earlier copied snapshot may
+be stale.
+Do not import competing copies: the importer refuses differing destination files.
+Run the import when no deployment is running and use the utility's state copy for
+future runs. The old folder stays intact; avoid running both copies for the same
+deployment.
 
-Its first run creates/reuses the generic `osmh-admins` IAM group,
-`osmh-tagged-instances` dynamic group and `osmh-automation-policy` IAM policy.
-The policy contains all OSMH statements managed by the worker. In a Function the
-human admin group receives no automatic membership; the Function authenticates
-through its own resource principal. A local API-user worker retains the earlier
-automatic user-membership behavior.
+For Windows, securely transfer the authoritative `.deployment` directory first:
 
-Registered instances skip plugin reconfiguration. Profiles and OSMH groups stay
-in the supplied parent/root within each region. Existing memberships in other
-groups are preserved. Guest registration still in progress is reported as PENDING
-and checked next time; a successful invocation does not mean all guests registered.
+```powershell
+& "C:\path\to\osmh_onboarding\.venv\Scripts\osmh-onboard.exe" --import-state "C:\Migration\.deployment"
+```
 
-## 3. Separate deployment command (optional)
+Terraform state may contain sensitive resource/configuration data; keep it private
+and backed up, not in Git or a distributable package. This utility does not provide
+shared remote state or coordinate independent machines.
 
-Normal `onboard_osmh.py` runs now perform this step automatically. This command
-remains useful for deploying/updating infrastructure without repeating selection.
+The importer expects `<tenancy>/<scope>/<home-region>/terraform.tfstate`, as
+created by the previous scripts. It does not migrate OCI Resource Manager stack
+state or arbitrary Terraform layouts; those need an explicit migration first.
 
-Home region, image version and Docker username are resolved automatically. Replace
-the scope and subnet placeholders:
+## Preview, then onboard
+
+Replace `YOUR_COMPARTMENT_OCID` below with a real compartment OCID. Mac (with the
+virtual environment activated):
 
 ```bash
-python deploy_osmh_function.py <compartment-or-tenancy-OCID> \
-  --profile pridhu \
-  --subnet-ids <subnet-OCID> \
-  --workload-regions us-ashburn-1,us-phoenix-1
+osmh-onboard "YOUR_COMPARTMENT_OCID" --regions us-ashburn-1 --profile DEFAULT --dry-run
+osmh-onboard "YOUR_COMPARTMENT_OCID" --regions us-ashburn-1 --profile DEFAULT
 ```
 
-This validates tenancy/scope and the subnet, initializes Terraform, and prints a
-plan. It changes no cloud resources, though it downloads providers and creates
-local Terraform directories. Repeat with `--apply` to build/push Linux AMD64 and
-apply Terraform after its confirmation. The build prompts for the profile user's
-OCI auth token. `--skip-build` uses an already-pushed image without Docker login.
-Optional `--image` overrides must use the home-region registry and correct namespace;
-use a new version tag for each code release when overriding automatic naming.
-Use `--create-network` instead of `--subnet-ids` for automatic networking. The
-deployer creates a private OCIR repository if absent before the image push;
-existing repositories are reused without changing their settings. Repository
-creation is idempotent SDK setup, outside Terraform state; retain it for later
-image versions. The namespace is verified against the authenticated tenancy.
-Omit `--workload-regions` for the deployment region; set it to `all` for all READY
-subscriptions. Avoid overlapping deployments managing the same instances.
+Windows (PowerShell, no activation needed):
 
-Deployment creates or reuses an application, then creates the Function and
-schedule. Optional invocation logging can be enabled with `--enable-function-logging`.
-The Function and schedule permissions use exact resource-principal policy
-conditions, so the deployment does not consume extra DynamicResourceGroups. The
-worker creates/reuses the single tag-based Compute group on its first eligible
-run. IAM groups, dynamic groups and policies are tenancy-root resources rather
-than compartment-local resources. It also grants the Functions service read
-access to the specific image repository.
+```powershell
+& "C:\path\to\osmh_onboarding\.venv\Scripts\osmh-onboard.exe" "YOUR_COMPARTMENT_OCID" --regions us-ashburn-1 --dry-run
+& "C:\path\to\osmh_onboarding\.venv\Scripts\osmh-onboard.exe" "YOUR_COMPARTMENT_OCID" --regions us-ashburn-1
+```
 
-The bootstrap policy grants the Function group/dynamic-group creation and policy
-creation/update, so it can perform the requested first-run IAM setup. **Permission
-to write policies is privileged tenancy access**, even for a single Function.
-After setup succeeds, redeploy with `--disable-iam-bootstrap --skip-build` to remove
-these privileges and configure the worker with `--skip-iam`. Operational access
-remains, including the existing tenancy-wide OSMH grant for root vendor sources.
+Dry-run still requires valid OCI credentials and read access. It previews actions
+without applying OCI changes; it does not prove that later write permissions,
+Docker builds, network access or registrations will succeed.
 
-Terraform state is isolated by tenancy, scope and deployment region in
-`.deployment/`. Preserve/protect it for updates; losing it can cause duplicate
-resources or name collisions. Do not use separate Terraform state for the same
-deployment. `--disable-schedule` leaves the schedule inactive. Direct Terraform
-configuration is also available in `deployment/`.
+On a real run, follow the Function app/network prompts, select the desired
+instances, and enter the OCIR auth token when prompted. Successful deployment and
+accepted detached invocation are separate from successful OSMH registration.
 
-The combined command uses profiles from `~/.oci/config` and API-key/security-token
-authentication for local deployment. Custom SDK config paths, principal auth and
-local profile/source/IAM overrides can still be used with `--tag-only` or the
-local worker, but are rejected before tagging in automatic-deployment mode rather
-than silently ignored. Repository-family and OSMH group-prefix options are passed
-to the Function. `--skip-iam` maps to disabled IAM bootstrap and requires prior setup.
+Other examples (replace the OCID placeholders):
 
-## 4. Verify in OCI
+```text
+osmh-onboard YOUR_COMPARTMENT_OCID --regions us-ashburn-1,us-phoenix-1 --profile MY_PROFILE
+osmh-onboard YOUR_TENANCY_OCID --all-regions --profile MY_PROFILE
+osmh-onboard YOUR_COMPARTMENT_OCID --regions us-ashburn-1 --tag-only
+osmh-onboard YOUR_COMPARTMENT_OCID --regions us-ashburn-1 --function-application-id YOUR_FNAPP_OCID
+osmh-onboard YOUR_COMPARTMENT_OCID --regions us-ashburn-1 --cleanup-only --dry-run
+```
 
-After deployment, the first detached Function invocation is started automatically.
-Detached mode avoids client-side timeout while OSMH reconciliation continues in
-OCI Functions. Check the Function invocation logs and OSMH instance/group status
-for completion. If OCI Functions reports a temporary invoke-capacity error, the
-deployer retries and leaves the deployment/schedule intact even if the initial
-start is not accepted before timeout; rerun the same command or invoke manually.
-Newly created instance-group membership can take about an hour to propagate, so
-initial guest registrations may remain pending and be completed by the next
-reconciliation. Terraform outputs the Function and schedule OCIDs. To start
-another manual reconciliation, invoke in **Detached** mode:
+Workload regions and the Function home region are separate. Unavailable region
+subscriptions are reported/skipped while available requested regions continue.
+The target must belong to the selected profile's tenancy. The nightly worker
+never unregisters instances: remove `--dry-run` from the cleanup example to
+explicitly select and approve confirmed terminated instances for unregistration.
+Inactive OSMH status alone is not proof of Compute termination.
+
+## Use without environment activation (optional)
+
+Install using `pipx` instead of the virtual-environment steps above. `pipx` exposes
+the command on your user PATH and keeps dependencies isolated.
+
+Mac, if Homebrew is installed:
 
 ```bash
-oci fn function invoke --profile pridhu --region <TENANCY_HOME_REGION> \
-  --function-id <function-OCID> --fn-invoke-type detached \
-  --body '{"dry_run":true}' --file -
+brew install pipx
+pipx ensurepath
+pipx install git+https://github.com/gautamm2707/osmh_onboarding.git
 ```
 
-Use `--body '{}'` for a real reconciliation. Inspect the Functions application's
-invocation status/log, the schedule's last/next run, and OSMH instance status/group
-membership. The next scheduled run should be 16:30 UTC (22:00 IST). The schedule
-invokes in Detached mode automatically. Payloads cannot override scope, regions
-or credentials.
+Windows:
 
-The worker has a 55-minute subprocess limit inside a 60-minute Detached Function.
-A timeout or API failure is reported as a failed invocation. Completed idempotent
-work is retained for the next run. Partition very large deployments into
-non-overlapping scopes/regions if scans cannot finish within that budget. Avoid
-concurrent manual/scheduled runs on the same scope; creation conflicts are surfaced
-and can be retried after the other run.
-
-## Cleanup and migration
-
-An older deployment outside the home region is not migrated or deleted by this
-update. Preserve its state and deliberately disable its old schedule before
-creating an overlapping home-region deployment. This update never silently
-deletes the old network, Function, schedule or repository.
-
-The scheduled worker never unregisters instances. Retain explicit user selection
-for confirmed terminated records:
-
-```bash
-python onboard_osmh.py <compartment-or-tenancy-OCID> --cleanup-only --dry-run
-python onboard_osmh.py <compartment-or-tenancy-OCID> --cleanup-only
+```powershell
+py -3.12 -m pip install --user pipx
+py -3.12 -m pipx ensurepath
+py -3.12 -m pipx install git+https://github.com/gautamm2707/osmh_onboarding.git
 ```
 
-A single reusable tag-based Compute group is created instead of overwriting an
-old compartment-based group's rules. Old groups, policy grants, registrations and
-custom statements are preserved. Legacy grants remain effective until an
-administrator retires them; this change does not revoke old compartment-wide
-membership. Account for deployment bootstrap policies in tenancies near quota.
+Open a new terminal, then run `osmh-onboard --help` from any directory.
+For a local checkout, use `pipx install .`. For a pinned Git installation, append
+`@<commit-sha>` to the repository URL.
 
-## Offline checks
+## Troubleshooting and important behavior
 
-```bash
-python -B -m unittest discover -q
-terraform -chdir=deployment init -backend=false
-terraform -chdir=deployment validate
-terraform -chdir=deployment fmt -check
+- Start Docker Desktop/Colima and confirm `docker info` reports a server before
+  a deployment. Windows builds require Linux containers.
+- OCI read access does not imply permission to create IAM or root-scoped
+  software-source resources. Check the caller's profile, permissions and policy
+  propagation for authorization errors.
+- For plugin failures or pending registration, inspect Oracle Cloud Agent/plugin
+  status and instance network access. Repeated local deployment does not repair
+  an unsupported image or unreachable service endpoint.
+- If Terraform proposes deleting/replacing resources, automatic deployment stops.
+  Check the selected application/network and the authoritative state. Do not
+  remove state to bypass that check. Some tags/resources may already be applied.
+- An accepted detached invocation does not establish successful registration.
+  Check Function results/logs and OSMH status/group membership. Configure invocation
+  logging if diagnostic output is needed; it is optional by default.
+- New networks, NAT gateways, image storage, Functions and logs may incur OCI
+  charges and consume quotas. Uninstalling this package does not delete those
+  resources or disable its schedule.
+
+## State, updates and maintenance
+
+- Default state: `~/.osmh-utility/state` on Mac;
+  `%USERPROFILE%\.osmh-utility\state` on Windows.
+- Layout: `<tenancy-OCID>/<scope-OCID>/<home-region>/terraform.tfstate`.
+- Override with `--state-dir PATH` or environment variable `OSMH_STATE_DIR`.
+  Use the same location for import and subsequent runs. An explicit `--state-dir`
+  takes precedence over the environment variable.
+- Terraform templates are copied to that scope's writable directory. Installed
+  package files are not used to store state, providers or plans.
+- `osmh-onboard --utility-help` lists wrapper-specific options; `--help` lists all
+  existing onboarding options. Original CLI arguments are passed to the runtime.
+- For updates, stop active deployments, run `git pull --ff-only`, then
+  `python -m pip install --upgrade .` from the clone using its virtual environment.
+  On Windows without activation, use `.\.venv\Scripts\python.exe`. Pulling source
+  alone does not change a normally installed command. For pipx, use
+  `pipx install --force git+https://github.com/gautamm2707/osmh_onboarding.git`.
+  State survives reinstalls. Changes in older script folders do not update this
+  independent utility.
+- `src/osmh_utility/cli.py` is the launcher; `src/osmh_utility/runtime/` contains
+  the scripts and Function/Terraform assets. `tests/` contains offline CLI tests.
+
+Only source, package metadata, documentation, tests and required runtime assets
+are tracked. Credentials, deployment state, virtual environments, generated ZIPs,
+build outputs and obsolete standalone/Resource Manager files are excluded.
+
+## Verification and limitations
+
+Run the offline checks with the installed environment:
+
+```text
+python -m unittest discover -s tests -v
 ```
 
-Tests use mocks and make no OCI changes. A container build, real Function
-invocation, and guest registration in a test compartment are still needed for
-end-to-end validation.
+Packaging does not eliminate the existing script's service prerequisites or turn
+it into a standalone binary. Native Windows launch/deployment and live OCI runs
+need validation on those environments; local packaging tests cannot establish that.
 
-References: [tag-based dynamic groups](https://docs.oracle.com/en-us/iaas/Content/Identity/Tasks/managingdynamicgroups.htm),
-[scheduled Functions](https://docs.oracle.com/en-us/iaas/Content/Functions/Tasks/functionsschedulingfunctions-about.htm),
-[schedule creation](https://docs.oracle.com/en-us/iaas/Content/Functions/Tasks/functionsscheduling.htm),
-[IAM permissions](https://docs.oracle.com/en-us/iaas/Content/Identity/Reference/iampolicyreference.htm).
+Reference documentation:
+
+- [Python command-line packaging](https://packaging.python.org/en/latest/guides/creating-command-line-tools/)
+- [OCI SDK configuration](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/sdkconfig.htm)
+- [Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/)
+- [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/)
+- [Terraform installation](https://developer.hashicorp.com/terraform/install)

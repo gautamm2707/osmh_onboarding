@@ -7,7 +7,6 @@
 !osmh_deployment.py
 !osmh_function_setup.py
 !reconcile_osmh.py
-!osmh_selection.py
 !function/
 !function/func.py
 !function/requirements.txt

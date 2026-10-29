@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import time
 from types import SimpleNamespace as NS
@@ -280,7 +281,9 @@ def main(argv=None):
                   bootstrap_iam=not args.disable_iam_bootstrap, schedule_enabled=not args.disable_schedule,
                   logging_enabled=args.enable_logging)
     # Separate state for every tenancy/scope/deployment region. Reuse on subsequent runs.
-    state_dir = root / ".deployment" / config["tenancy"] / args.compartment_id / args.region
+    state_root = Path(os.environ.get("OSMH_STATE_DIR") or
+                      Path.home() / ".osmh-utility" / "state").expanduser().resolve()
+    state_dir = state_root / config["tenancy"] / args.compartment_id / args.region
     state_dir.mkdir(parents=True, exist_ok=True)
     reconcile_deployment_mode(args, state_dir)
     subnets = [s.strip() for s in (args.subnet_ids or "").split(",") if s.strip()]
@@ -291,7 +294,17 @@ def main(argv=None):
     env.update({f"TF_VAR_{key}": json.dumps(value) if not isinstance(value, str) else value
                 for key, value in values.items()})
     env["TF_DATA_DIR"] = str(state_dir / "providers")
-    terraform = ["terraform", f"-chdir={root / 'deployment'}"]
+    # Installed packages may be read-only. Terraform works in this scope's state
+    # directory, with its own provider data and lock file, never in site-packages.
+    terraform_dir = state_dir / "terraform"
+    terraform_dir.mkdir(parents=True, exist_ok=True)
+    for source in (root / "deployment").glob("*.tf"):
+        shutil.copyfile(source, terraform_dir / source.name)
+    lock = terraform_dir / ".terraform.lock.hcl"
+    if not lock.exists():
+        shutil.copyfile(root / "deployment" / lock.name, lock)
+    print(f"Deployment state: {state_dir}")
+    terraform = ["terraform", f"-chdir={terraform_dir}"]
     subprocess.run([*terraform, "init", "-input=false"], env=env, check=True)
     state = f"-state={state_dir / 'terraform.tfstate'}"
     import_existing_reused_function(args, config, kwargs, terraform, env, state)
