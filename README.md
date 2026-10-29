@@ -60,7 +60,163 @@ For another tenancy, add a named profile and select it with `--profile`; the inp
 compartment/root OCID must belong to that profile's tenancy. Resource availability,
 IAM and networking still need validation in each tenancy.
 
+## Install and start a Docker engine
+
+The utility needs both the **Docker command-line client** and a **running engine**
+to build/push its Function image. Installing the Python utility or just the Docker
+CLI does not start an engine. On Mac, choose Colima or Docker Desktop; on Windows,
+use Docker Desktop with Linux containers. Docker Compose is not required.
+
+### Mac option A: Colima and Docker CLI
+
+1. If `brew --version` fails, install Homebrew using its
+   [official installer](https://brew.sh/):
+
+   ```bash
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+   ```
+
+   Follow the installer's **Next steps**, including adding Homebrew to PATH, and
+   reopen Terminal. Then check `brew --version`.
+
+2. Install Colima, the Docker client and Buildx:
+
+   ```bash
+   brew install colima docker docker-buildx
+   colima version
+   docker --version
+   docker buildx version
+   ```
+
+   If Buildx is not found, register the installed plugin:
+
+   ```bash
+   mkdir -p "$HOME/.docker/cli-plugins"
+   ln -s "$(brew --prefix)/opt/docker-buildx/bin/docker-buildx" "$HOME/.docker/cli-plugins/docker-buildx"
+   docker buildx version
+   ```
+
+   If that link already exists, inspect it instead of overwriting it. An alternative
+   is to merge Homebrew's plugin directory into `cliPluginsExtraDirs` in your
+   existing Docker configuration, following the
+   [Homebrew Buildx instructions](https://formulae.brew.sh/formula/docker-buildx).
+   Preserve other Docker settings.
+
+3. Start the default Colima profile with the Docker runtime:
+
+   ```bash
+   colima start --runtime docker
+   ```
+
+   For a **new** profile on Apple Silicon with macOS 13+, you can instead enable
+   VZ/Rosetta for the utility's `linux/amd64` builds:
+
+   ```bash
+   colima start --runtime docker --vm-type vz --vz-rosetta
+   ```
+
+   Install Rosetta if macOS requests it. An existing profile's VM type/architecture
+   cannot be changed in place; retain its configuration or create a separate
+   named profile rather than deleting its data. See
+   [Colima VM configuration](https://colima.run/docs/configuration/).
+
+4. Select the engine and verify it:
+
+   ```bash
+   colima status
+   docker context ls
+   docker context use colima
+   docker info
+   docker run --rm --platform linux/amd64 hello-world
+   ```
+
+   `docker info` must include **Server** information without a connection error.
+   The test container also checks image download and amd64 execution; it needs
+   internet access. For a named Colima profile, select its context from the list.
+
+After a reboot, run `colima start` before using the utility. Optional automatic
+startup for a Homebrew installation is `brew services start colima`. To stop a
+manually started engine after use, run `colima stop`; this stops its containers.
+
+Sources: [Colima installation](https://colima.run/docs/installation/) and
+[Colima startup/contexts FAQ](https://colima.run/docs/faq/).
+
+### Mac option B: Docker Desktop
+
+1. Download the Apple Silicon or Intel installer appropriate for your Mac from
+   [Docker's Mac installation page](https://docs.docker.com/desktop/setup/install/mac-install/).
+2. Open the downloaded DMG, move Docker to Applications, then launch Docker.
+   Complete first-run setup and wait until the engine is running.
+3. Open a new Terminal and check:
+
+   ```bash
+   docker --version
+   docker context ls
+   docker info
+   docker buildx version
+   docker run --rm --platform linux/amd64 hello-world
+   ```
+
+If a stopped Colima context is still selected, switch to the Docker Desktop
+context shown by `docker context ls` (commonly `desktop-linux`). Docker Desktop
+includes the Docker client and Buildx, so separate Homebrew installations are
+not needed for this option. Check Docker's published system requirements and
+subscription terms for your organization.
+
+### Windows: Docker Desktop with WSL 2
+
+1. If WSL is not installed, open **PowerShell as Administrator** and run:
+
+   ```powershell
+   wsl --install
+   ```
+
+   Restart Windows when requested. Then run `wsl --update` and `wsl --version`.
+   Follow [Microsoft's WSL setup](https://learn.microsoft.com/en-us/windows/wsl/install)
+   if virtualization or Windows features need enabling.
+2. Download and run the installer from
+   [Docker's Windows installation page](https://docs.docker.com/desktop/setup/install/windows-install/).
+   Confirm your Windows/hardware meets its requirements and select the WSL 2
+   backend. Launch Docker Desktop and finish setup; installation alone does not
+   guarantee the engine has started.
+3. Ensure Docker Desktop uses **Linux containers**, then open a new PowerShell:
+
+   ```powershell
+   docker --version
+   docker info
+   docker buildx version
+   docker run --rm --platform linux/amd64 hello-world
+   ```
+
+Continue with utility installation only after the Server check and test container
+succeed. Docker Desktop includes Buildx; Colima is not required for this Windows
+setup. Use Docker's installation page for current requirements and subscription
+terms.
+
+### Fix a missing socket or stopped engine
+
+For `Cannot connect to the Docker daemon` or
+`~/.colima/default/docker.sock: no such file or directory` on a Colima setup:
+
+```bash
+colima start
+colima status
+docker context ls
+docker context use colima
+docker info
+```
+
+If it still points to a different socket, check whether `DOCKER_HOST` or
+`DOCKER_CONTEXT` is overriding the selected context. If those are stale settings
+you no longer need, remove them from the current Mac shell with
+`unset DOCKER_HOST DOCKER_CONTEXT`, then select the intended context again. For
+Docker Desktop, start the app and select its context. Do not create an empty
+socket file or delete Colima profiles to fix a stopped engine.
+
 ## Install on macOS
+
+If Docker is not installed or its engine is not running, complete
+[Install and start a Docker engine](#install-and-start-a-docker-engine) first.
 
 With Python installed, open Terminal:
 
@@ -89,6 +245,9 @@ After activation, `osmh-onboard` works from any folder. Without activation, invo
 with the actual parent directory of your clone.
 
 ## Install on Windows (PowerShell)
+
+Complete the [Windows Docker setup](#windows-docker-desktop-with-wsl-2) first if
+Docker is not already available.
 
 Open PowerShell in your preferred parent directory and clone the repository.
 Do not copy a Mac `.venv`, Terraform provider cache or installed binaries.
